@@ -1,4 +1,4 @@
-Cafunction [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileName,maxNeurons,estNeuronSize)
+function [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileName,maxNeurons,estNeuronSize)
 %CaImSegmentation.m
 %   See Pnevmatikakis & Paninski, 2014 & 2016, for their matrix factorization
 %     algorithm to automate image segmentation for calcium imaging data.
@@ -64,7 +64,7 @@ Cafunction [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileNa
 % By: Byron Price
 
 if nargin == 0 
-    VideoFileName = 'demoMovie.tif';
+    VideoFileName = which('demoMovie.tif');
     maxNeurons = 30;
     estNeuronSize = 8;
 end
