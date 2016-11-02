@@ -1,0 +1,10 @@
+{
+"CaImSegmentation":
+{
+    "inputs":
+	[
+		{"name":"filename", "kind":"required", "type":[["filepath=*.tif,*.mat"], ["char"]]}
+	]
+
+}
+}
