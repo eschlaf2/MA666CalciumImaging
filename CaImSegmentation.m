@@ -10,7 +10,7 @@ function [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileName
 %     F = AC+B, where A is a d-by-K matrix representing the spatial footprint
 %     of neuron k, C is a K-by-T matrix representing the calcium activity of
 %     the k-th neuron, and B is a d-by-T matrix representing the background
-%     fluorescence at each pixel.  The algorithm infers the matrices
+%     fluorescence at each pixel.  The algorithmopen  infers the matrices
 %     A and C from the observed fluorescence signal Y using matrix factorization
 %     and convex optimization based on several assumptions:
 %       1) the difference between F = AC+B and Y will be the noise E, thus
@@ -68,18 +68,22 @@ if nargin == 0
     maxNeurons = 30;
     estNeuronSize = 8;
 end
-[~,~,ext] = fileparts(VideoFileName);
+if ischar(VideoFileName)
+    [~,~,ext] = fileparts(VideoFileName);
+    if strcmpi(ext,'.mat')
+        Y = struct2array(load(VideoFileName));
+    else
+        nam = VideoFileName;          % insert path to tiff stack here
+    %     sframe=1;						% user input: first frame to read (optional, default 1)
+        Y = readTifStack(nam);
+    end
+else
+    Y = VideoFileName;
+end
 
     
 addpath(genpath('utilities'));
 
-if strcmpi(ext,'.mat')
-    Y = struct2array(load(VideoFileName));
-else
-    nam = VideoFileName;          % insert path to tiff stack here
-    sframe=1;						% user input: first frame to read (optional, default 1)
-    Y = bigread2(nam,sframe);
-end
 
 
 Y = Y - min(Y(:)); 
@@ -93,7 +97,7 @@ height = d2;
 
 K = maxNeurons;                        % number of components to be found - user defined
 tau = estNeuronSize;                   % std of gaussian kernel (size of neuron) - 4 is a good start 
-p = 2;                                % order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)
+p = 4;                                % order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)
 merge_thr = 0.8;                       % merging threshold
 
 options = CNMFSetParms(...                      

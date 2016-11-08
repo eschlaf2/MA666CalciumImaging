@@ -125,19 +125,21 @@ fontname = 'helvetica';
     if ~(nargin < 6 || isempty(Coor))
         jsf = [];
     else
-        jsf_flag = false;
-        for i = 2:size(Aor,2);
+        i = size(Aor,2);
+        jsf(i) = struct('id',i,...
+                'coordinates',CR{i,1}',...
+                'values',CR{i,2},...
+                'bbox',[min(CR{i,1}(1,:)),max(CR{i,1}(1,:)),min(CR{i,1}(2,:)),max(CR{i,1}(2,:))],...
+                'centroid',cm(i,:));
+%         jsf = repmat(jsf,size(Aor,2), 1);
+        for i = 1:size(Aor,2)-1;
             if ~isempty(CR{i,1})
                 jsf(i) = struct('id',i,...
                             'coordinates',CR{i,1}',...
                             'values',CR{i,2},...
                             'bbox',[min(CR{i,1}(1,:)),max(CR{i,1}(1,:)),min(CR{i,1}(2,:)),max(CR{i,1}(2,:))],...
                             'centroid',cm(i,:));
-%             end
-                if ~jsf_flag
-                    jsf = repmat(jsf,size(Aor,2),1);
-                end
-                jsf_flag = true;
+                
             end
         end
     end    
