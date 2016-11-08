@@ -127,6 +127,9 @@ Yr = reshape(Y,d,T);
 
 % update temporal components
 P.p = 0;    % set AR temporarily to zero for speed
+if size(A,2) == 0
+    error('Zero spatial components found.')
+end
 [C,f,P,S,YrA] = update_temporal_components(Yr,A,b,Cin,fin,P,options);
 
 % merge found components
