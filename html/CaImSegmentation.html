@@ -1,0 +1,6146 @@
+
+<!DOCTYPE html
+  PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+   <!--
+This HTML was auto-generated from MATLAB code.
+To make changes, update the MATLAB code and republish this document.
+      --><title>CaImSegmentation</title><meta name="generator" content="MATLAB 9.0"><link rel="schema.DC" href="http://purl.org/dc/elements/1.1/"><meta name="DC.date" content="2016-11-08"><meta name="DC.source" content="CaImSegmentation.m"><style type="text/css">
+html,body,div,span,applet,object,iframe,h1,h2,h3,h4,h5,h6,p,blockquote,pre,a,abbr,acronym,address,big,cite,code,del,dfn,em,font,img,ins,kbd,q,s,samp,small,strike,strong,sub,sup,tt,var,b,u,i,center,dl,dt,dd,ol,ul,li,fieldset,form,label,legend,table,caption,tbody,tfoot,thead,tr,th,td{margin:0;padding:0;border:0;outline:0;font-size:100%;vertical-align:baseline;background:transparent}body{line-height:1}ol,ul{list-style:none}blockquote,q{quotes:none}blockquote:before,blockquote:after,q:before,q:after{content:'';content:none}:focus{outine:0}ins{text-decoration:none}del{text-decoration:line-through}table{border-collapse:collapse;border-spacing:0}
+
+html { min-height:100%; margin-bottom:1px; }
+html body { height:100%; margin:0px; font-family:Arial, Helvetica, sans-serif; font-size:10px; color:#000; line-height:140%; background:#fff none; overflow-y:scroll; }
+html body td { vertical-align:top; text-align:left; }
+
+h1 { padding:0px; margin:0px 0px 25px; font-family:Arial, Helvetica, sans-serif; font-size:1.5em; color:#d55000; line-height:100%; font-weight:normal; }
+h2 { padding:0px; margin:0px 0px 8px; font-family:Arial, Helvetica, sans-serif; font-size:1.2em; color:#000; font-weight:bold; line-height:140%; border-bottom:1px solid #d6d4d4; display:block; }
+h3 { padding:0px; margin:0px 0px 5px; font-family:Arial, Helvetica, sans-serif; font-size:1.1em; color:#000; font-weight:bold; line-height:140%; }
+
+a { color:#005fce; text-decoration:none; }
+a:hover { color:#005fce; text-decoration:underline; }
+a:visited { color:#004aa0; text-decoration:none; }
+
+p { padding:0px; margin:0px 0px 20px; }
+img { padding:0px; margin:0px 0px 20px; border:none; }
+p img, pre img, tt img, li img, h1 img, h2 img { margin-bottom:0px; } 
+
+ul { padding:0px; margin:0px 0px 20px 23px; list-style:square; }
+ul li { padding:0px; margin:0px 0px 7px 0px; }
+ul li ul { padding:5px 0px 0px; margin:0px 0px 7px 23px; }
+ul li ol li { list-style:decimal; }
+ol { padding:0px; margin:0px 0px 20px 0px; list-style:decimal; }
+ol li { padding:0px; margin:0px 0px 7px 23px; list-style-type:decimal; }
+ol li ol { padding:5px 0px 0px; margin:0px 0px 7px 0px; }
+ol li ol li { list-style-type:lower-alpha; }
+ol li ul { padding-top:7px; }
+ol li ul li { list-style:square; }
+
+.content { font-size:1.2em; line-height:140%; padding: 20px; }
+
+pre, code { font-size:12px; }
+tt { font-size: 1.2em; }
+pre { margin:0px 0px 20px; }
+pre.codeinput { padding:10px; border:1px solid #d3d3d3; background:#f7f7f7; }
+pre.codeoutput { padding:10px 11px; margin:0px 0px 20px; color:#4c4c4c; }
+pre.error { color:red; }
+
+@media print { pre.codeinput, pre.codeoutput { word-wrap:break-word; width:100%; } }
+
+span.keyword { color:#0000FF }
+span.comment { color:#228B22 }
+span.string { color:#A020F0 }
+span.untermstring { color:#B20000 }
+span.syscmd { color:#B28C00 }
+
+.footer { width:auto; padding:10px 0px; margin:25px 0px 0px; border-top:1px dotted #878787; font-size:0.8em; line-height:140%; font-style:italic; color:#878787; text-align:left; float:none; }
+.footer p { margin:0px; }
+.footer a { color:#878787; }
+.footer a:hover { color:#878787; text-decoration:underline; }
+.footer a:visited { color:#878787; }
+
+table th { padding:7px 5px; text-align:left; vertical-align:middle; border: 1px solid #d6d4d4; font-weight:bold; }
+table td { padding:7px 5px; text-align:left; vertical-align:top; border:1px solid #d6d4d4; }
+
+
+
+
+
+  </style></head><body><div class="content"><pre class="codeinput"><span class="keyword">function</span> [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileName,maxNeurons,estNeuronSize)
+<span class="comment">%CaImSegmentation.m</span>
+<span class="comment">%   See Pnevmatikakis &amp; Paninski, 2014 &amp; 2016, for their matrix factorization</span>
+<span class="comment">%     algorithm to automate image segmentation for calcium imaging data.</span>
+<span class="comment">%     Briefly, if d is the total number of pixels in an image, T is the number</span>
+<span class="comment">%     of time steps in a video, and K is the maximum number of neurons, then</span>
+<span class="comment">%     the observed fluorescence signal Y (matrix size d-by-T) can be</span>
+<span class="comment">%     regarded as a noisy function of the true signal,F, by Y = F + E, where E is</span>
+<span class="comment">%     Gaussian noise.  F, in turn, can be regarded as a signal of the form</span>
+<span class="comment">%     F = AC+B, where A is a d-by-K matrix representing the spatial footprint</span>
+<span class="comment">%     of neuron k, C is a K-by-T matrix representing the calcium activity of</span>
+<span class="comment">%     the k-th neuron, and B is a d-by-T matrix representing the background</span>
+<span class="comment">%     fluorescence at each pixel.  The algorithmopen  infers the matrices</span>
+<span class="comment">%     A and C from the observed fluorescence signal Y using matrix factorization</span>
+<span class="comment">%     and convex optimization based on several assumptions:</span>
+<span class="comment">%       1) the difference between F = AC+B and Y will be the noise E, thus</span>
+<span class="comment">%        constraining the following steps to find values for A, C, and B</span>
+<span class="comment">%        that force abs(Y-F) &lt; noise ... they make an estimate of the noise</span>
+<span class="comment">%        as a first step in the algorithm</span>
+<span class="comment">%       2) each neuron will be small relative to the size of the original</span>
+<span class="comment">%        image, of approximate size based on the input estNeuronSize, so</span>
+<span class="comment">%        the matrix A should be sparse</span>
+<span class="comment">%       3) the calcium signal, C, for each neuron will be an AR(p) process</span>
+<span class="comment">%        of the following form, for an individual neuron,</span>
+<span class="comment">%          c(t) = SUM [j=1 to p] gamma-p*c(t-j) + s(t), where s(t) is the</span>
+<span class="comment">%          number of actual spikes at time t</span>
+<span class="comment">%</span>
+<span class="comment">%  This code must be run after downloading ca_source_extraction-master</span>
+<span class="comment">%   from the GitHub repository created for the papers referenced above -</span>
+<span class="comment">%   Go to: https://github.com/epnev/ca_source_extraction.git</span>
+<span class="comment">%  You also need CVX placed in your MATLAB directory - http://cvxr.com/cvx/download/</span>
+<span class="comment">%</span>
+<span class="comment">%INPUT: VideoFileName - file name of the video to be segmented as a string,</span>
+<span class="comment">%          'Video.tif'</span>
+<span class="comment">%       maxNeurons - maximum neurons in the video, this is an estimate that</span>
+<span class="comment">%        constrains the maximum number of neurons, this value will affect</span>
+<span class="comment">%        the number of neurons found by the algorithm</span>
+<span class="comment">%       estNeuronSize - estimate of the average neuron diameter in pixels</span>
+<span class="comment">%       maxITER -  number of iterations to perform (update spatial, update</span>
+<span class="comment">%        temporal, merge, repeat)</span>
+<span class="comment">%</span>
+<span class="comment">%OUTPUT: SpatMap - d-by-K matrix representing the spatial map for the</span>
+<span class="comment">%         k-th neuron</span>
+<span class="comment">%         To view the maps, run the following code:</span>
+<span class="comment">%          % if d = width*height, in pixels</span>
+<span class="comment">%          myMap = zeros(width,height,K);</span>
+<span class="comment">%          for ii=1:K</span>
+<span class="comment">%             myMap(:,:,ii) = reshape(SpatMap(:,ii),[width,height]);</span>
+<span class="comment">%          end</span>
+<span class="comment">%          % make figure with a representative example</span>
+<span class="comment">%          figure();imagesc(squeeze(myMap(:,:,1)));colormap jet;</span>
+<span class="comment">%</span>
+<span class="comment">%        CaSignal - a K-by-T matrix representing the inferred calcium</span>
+<span class="comment">%         signal for the k-th neuron across all time steps, dF/F</span>
+<span class="comment">%        width - width of original image in pixels</span>
+<span class="comment">%        height - height of original image in pixels</span>
+<span class="comment">%</span>
+<span class="comment">% If you are unsure of the neuron size input, you must be very cautious because</span>
+<span class="comment">% the initialization procedure is heavily dependent on that value.  Check</span>
+<span class="comment">% greedyROI2d.m for that procedure, specifically look to imblur()</span>
+<span class="comment">%Created: 2016/02/09, 24 Cummington, Boston</span>
+<span class="comment">% Byron Price</span>
+<span class="comment">%Updated: 2016/02/09</span>
+<span class="comment">% By: Byron Price</span>
+
+<span class="keyword">if</span> nargin == 0
+    VideoFileName = which(<span class="string">'demoMovie.tif'</span>);
+    maxNeurons = 30;
+    estNeuronSize = 8;
+<span class="keyword">end</span>
+<span class="keyword">if</span> ischar(VideoFileName)
+    [~,~,ext] = fileparts(VideoFileName);
+    <span class="keyword">if</span> strcmpi(ext,<span class="string">'.mat'</span>)
+        Y = struct2array(load(VideoFileName));
+    <span class="keyword">else</span>
+        nam = VideoFileName;          <span class="comment">% insert path to tiff stack here</span>
+    <span class="comment">%     sframe=1;						% user input: first frame to read (optional, default 1)</span>
+        Y = readTifStack(nam);
+    <span class="keyword">end</span>
+<span class="keyword">else</span>
+    Y = VideoFileName;
+<span class="keyword">end</span>
+
+
+addpath(genpath(<span class="string">'utilities'</span>));
+
+
+
+Y = Y - min(Y(:));
+<span class="keyword">if</span> ~isa(Y,<span class="string">'double'</span>);    Y = double(Y);  <span class="keyword">end</span>         <span class="comment">% convert to single</span>
+
+[d1,d2,T] = size(Y);                                <span class="comment">% dimensions of dataset</span>
+d = d1*d2;                                          <span class="comment">% total number of pixels</span>
+width = d1;
+height = d2;
+<span class="comment">% Set parameters</span>
+
+K = maxNeurons;                        <span class="comment">% number of components to be found - user defined</span>
+tau = estNeuronSize;                   <span class="comment">% std of gaussian kernel (size of neuron) - 4 is a good start</span>
+p = 4;                                <span class="comment">% order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)</span>
+merge_thr = 0.8;                       <span class="comment">% merging threshold</span>
+
+options = CNMFSetParms(<span class="keyword">...</span>
+    <span class="string">'d1'</span>,d1,<span class="string">'d2'</span>,d2,<span class="keyword">...</span><span class="comment">                         % dimensions of datasets</span>
+    <span class="string">'search_method'</span>,<span class="string">'dilate'</span>,<span class="string">'dist'</span>,3,<span class="keyword">...</span><span class="comment">       % search locations when updating spatial components</span>
+    <span class="string">'deconv_method'</span>,<span class="string">'constrained_foopsi'</span>,<span class="keyword">...</span><span class="comment">    % activity deconvolution method</span>
+    <span class="string">'temporal_iter'</span>,2,<span class="keyword">...</span><span class="comment">                       % number of block-coordinate descent steps</span>
+    <span class="string">'fudge_factor'</span>,0.98,<span class="keyword">...</span><span class="comment">                     % bias correction for AR coefficients</span>
+    <span class="string">'merge_thr'</span>,merge_thr,<span class="keyword">...</span><span class="comment">                    % merging threshold</span>
+    <span class="string">'gSig'</span>,tau<span class="keyword">...</span>
+    );
+<span class="comment">% Data pre-processing</span>
+
+[P,Y] = preprocess_data(Y,p);
+
+<span class="comment">% fast initialization of spatial components using greedyROI and HALS</span>
+
+[Ain,Cin,bin,fin,center] = initialize_components(Y,K,tau,options,P);  <span class="comment">% initialize</span>
+refine_components = false;
+<span class="comment">% display centers of found components</span>
+Cn =  correlation_image(Y); <span class="comment">%reshape(P.sn,d1,d2);  %max(Y,[],3); %std(Y,[],3); % image statistic (only for display purposes)</span>
+
+<span class="comment">% update spatial components</span>
+Yr = reshape(Y,d,T);
+<span class="comment">%clear Y;</span>
+[A,b,Cin] = update_spatial_components(Yr,Cin,fin,[Ain,bin],P,options);
+
+<span class="comment">% update temporal components</span>
+P.p = 0;    <span class="comment">% set AR temporarily to zero for speed</span>
+<span class="keyword">if</span> size(A,2) == 0
+    error(<span class="string">'Zero spatial components found.'</span>)
+<span class="keyword">end</span>
+[C,f,P,S,YrA] = update_temporal_components(Yr,A,b,Cin,fin,P,options);
+
+<span class="comment">% merge found components</span>
+[Am,Cm,K_m,merged_ROIs,Pm,Sm] = merge_components(Yr,A,b,C,f,P,S,options);
+
+<span class="comment">% repeat</span>
+Pm.p = p;    <span class="comment">% restore AR value</span>
+[A2,b2,Cm] = update_spatial_components(Yr,Cm,f,[Am,b],Pm,options);
+[C2,f2,P2,S2,YrA2] = update_temporal_components(Yr,A2,b2,Cm,f,Pm,options);
+
+<span class="comment">% do some plotting</span>
+[A_or,C_or,S_or,P_or] = order_ROIs(A2,C2,S2,P2); <span class="comment">% order components</span>
+K_m = size(C_or,1);
+[C_df,~] = extract_DF_F(Yr,A_or,C_or,P_or,options); <span class="comment">% extract DF/F values (optional)</span>
+
+SpatMap = A_or(:,1:end-1);
+CaSignal = C_df(1:end-1,:);
+Spikes = S_or(1:end-1,:);
+
+<span class="comment">%contour_threshold = 0.95;                       % amount of energy used for each component to construct contour plot</span>
+figure;
+[~,~] = plot_contours(A_or,Cn,options,1); <span class="comment">% contour plot of spatial footprints</span>
+title(<span class="string">'Spatiotemporal Correlation Image'</span>);
+
+<span class="comment">% for noiseless video of calcium dynamics</span>
+<span class="comment">% myMat = SpatMap*CaSignal;</span>
+<span class="comment">% maxColor = max(max(CaSignal));</span>
+<span class="comment">% T = size(CaSignal,2);</span>
+<span class="comment">% myMat = reshape(myMat,[width,height,T]);</span>
+<span class="comment">% figure();</span>
+<span class="comment">% for tt=1:T</span>
+<span class="comment">%     imagesc(myMat(:,:,tt));colormap jet;colorbar;caxis([0 maxColor]);</span>
+<span class="comment">%     pause(5/T)</span>
+<span class="comment">% end</span>
+
+<span class="keyword">end</span>
+</pre><pre class="codeoutput">Warning: TIFF library warning - 'TIFFReadDirectory:  Unknown field with tag
+50838 (0xc696) encountered.' 
+Warning: TIFF library warning - 'TIFFReadDirectory:  Unknown field with tag
+50839 (0xc697) encountered.' 
+Estimating the noise power for each pixel from a simple PSD estimate...  done 
+No spatial downsampling is performed. Consider spatial downsampling if the field of view is very large. 
+No temporal downsampling is performed. Consider temporal downsampling if the recording is very long. 
+starting resampling 
+Initializing components with greedy method 
+found 10 out of 30 neurons..
+found 20 out of 30 neurons..
+found 30 out of 30 neurons..
+Refining initial estimates with HALS...  done 
+Updated spatial components 
+1 out of 30 components updated 
+4 out of 30 components updated 
+6 out of 30 components updated 
+9 out of 30 components updated 
+16 out of 30 components updated 
+24 out of 30 components updated 
+30 out of 30 components updated 
+2 out of 30 components updated 
+4 out of 30 components updated 
+5 out of 30 components updated 
+9 out of 30 components updated 
+14 out of 30 components updated 
+21 out of 30 components updated 
+30 out of 30 components updated 
+Updated spatial components 
+1 out of 27 components updated 
+2 out of 27 components updated 
+3 out of 27 components updated 
+4 out of 27 components updated 
+8 out of 27 components updated 
+12 out of 27 components updated 
+19 out of 27 components updated 
+27 out of 27 components updated 
+1 out of 27 components updated 
+3 out of 27 components updated 
+6 out of 27 components updated 
+Warning: No stable AR(4) model found. Checking for AR(5) model 
+
+&gt; In constrained_foopsi (line 106)
+  In parallel_function&gt;make_general_channel/channel_general (line 914)
+  In remoteParallelFunction (line 38)
+11 out of 27 components updated 
+14 out of 27 components updated 
+20 out of 27 components updated 
+27 out of 27 components updated 
+
+ans =
+
+(3306,1)       0.0397
+(3307,1)       0.0283
+(3365,1)       0.0397
+(3366,1)       0.0883
+(3367,1)       0.0429
+(3424,1)       0.0362
+(3425,1)       0.1119
+(3426,1)       0.1411
+(3427,1)       0.1119
+(3428,1)       0.0332
+(3484,1)       0.0524
+(3485,1)       0.1283
+(3486,1)       0.1432
+(3487,1)       0.1283
+(3488,1)       0.0660
+(3544,1)       0.0848
+(3545,1)       0.1311
+(3546,1)       0.1411
+(3547,1)       0.0903
+(3548,1)       0.0698
+(3549,1)       0.0518
+(3604,1)       0.1311
+(3605,1)       0.1311
+(3606,1)       0.1277
+(3607,1)       0.0879
+(3608,1)       0.0703
+(3609,1)       0.0692
+(3610,1)       0.0325
+(3664,1)       0.1426
+(3665,1)       0.1426
+(3666,1)       0.1277
+(3667,1)       0.0879
+(3668,1)       0.0746
+(3669,1)       0.0703
+(3670,1)       0.0703
+(3724,1)       0.1312
+(3725,1)       0.1395
+(3726,1)       0.1312
+(3727,1)       0.1007
+(3728,1)       0.0813
+(3729,1)       0.0813
+(3730,1)       0.0813
+(3731,1)       0.0225
+(3784,1)       0.1236
+(3785,1)       0.1351
+(3786,1)       0.1349
+(3787,1)       0.1139
+(3788,1)       0.1012
+(3789,1)       0.1139
+(3790,1)       0.1012
+(3791,1)       0.0516
+(3844,1)       0.0983
+(3845,1)       0.1349
+(3846,1)       0.1351
+(3847,1)       0.1349
+(3848,1)       0.1206
+(3849,1)       0.1659
+(3850,1)       0.1452
+(3851,1)       0.0813
+(3904,1)       0.0516
+(3905,1)       0.1426
+(3906,1)       0.1492
+(3907,1)       0.1629
+(3908,1)       0.1659
+(3909,1)       0.1968
+(3910,1)       0.1452
+(3911,1)       0.0813
+(3964,1)       0.0295
+(3965,1)       0.0844
+(3966,1)       0.1492
+(3967,1)       0.1629
+(3968,1)       0.1659
+(3969,1)       0.1659
+(3970,1)       0.1165
+(3971,1)       0.0403
+(4025,1)       0.0295
+(4026,1)       0.0844
+(4027,1)       0.1176
+(4028,1)       0.1345
+(4029,1)       0.1165
+(4030,1)       0.0403
+(4087,1)       0.0297
+(4088,1)       0.0297
+(4089,1)       0.0207
+(2853,2)       0.0002
+(2854,2)       0.0028
+(2911,2)       0.0022
+(2912,2)       0.0011
+(2913,2)       0.0003
+(2914,2)       0.0067
+(2915,2)       0.0093
+(2916,2)       0.0040
+(2971,2)       0.0024
+(2972,2)       0.0021
+(2973,2)       0.0011
+(2974,2)       0.0104
+(2975,2)       0.0083
+(2976,2)       0.0023
+(2977,2)       0.0042
+(3030,2)       0.0023
+(3031,2)       0.0037
+(3032,2)       0.0025
+(3033,2)       0.0049
+(3034,2)       0.0112
+(3035,2)       0.0064
+(3036,2)       0.0002
+(3037,2)       0.0032
+(3089,2)       0.0016
+(3090,2)       0.0044
+(3091,2)       0.0043
+(3092,2)       0.0041
+(3093,2)       0.0099
+(3094,2)       0.0095
+(3095,2)       0.0047
+(3096,2)       0.0022
+(3097,2)       0.0022
+(3098,2)       0.0021
+(3147,2)       0.0008
+(3148,2)       0.0028
+(3149,2)       0.0045
+(3150,2)       0.0062
+(3151,2)       0.0057
+(3152,2)       0.0075
+(3153,2)       0.0127
+(3154,2)       0.0083
+(3155,2)       0.0030
+(3156,2)       0.0015
+(3157,2)       0.0012
+(3158,2)       0.0017
+(3206,2)       0.0003
+(3207,2)       0.0024
+(3208,2)       0.0053
+(3209,2)       0.0062
+(3210,2)       0.0080
+(3211,2)       0.0081
+(3212,2)       0.0106
+(3213,2)       0.0131
+(3214,2)       0.0057
+(3215,2)       0.0021
+(3216,2)       0.0001
+(3266,2)       0.0008
+(3267,2)       0.0045
+(3268,2)       0.0075
+(3269,2)       0.0084
+(3270,2)       0.0107
+(3271,2)       0.0109
+(3272,2)       0.0122
+(3273,2)       0.0126
+(3274,2)       0.0049
+(3275,2)       0.0036
+(3322,2)       0.0007
+(3323,2)       0.0041
+(3326,2)       0.0009
+(3327,2)       0.0064
+(3328,2)       0.0113
+(3329,2)       0.0129
+(3330,2)       0.0147
+(3331,2)       0.0161
+(3332,2)       0.0167
+(3333,2)       0.0132
+(3334,2)       0.0063
+(3335,2)       0.0033
+(3338,2)       0.0002
+(3386,2)       0.0017
+(3387,2)       0.0084
+(3388,2)       0.0160
+(3389,2)       0.0220
+(3390,2)       0.0240
+(3391,2)       0.0254
+(3392,2)       0.0222
+(3393,2)       0.0134
+(3394,2)       0.0073
+(3395,2)       0.0033
+(3444,2)       0.0003
+(3445,2)       0.0001
+(3446,2)       0.0058
+(3447,2)       0.0112
+(3448,2)       0.0245
+(3449,2)       0.0375
+(3450,2)       0.0467
+(3451,2)       0.0448
+(3452,2)       0.0328
+(3453,2)       0.0177
+(3454,2)       0.0082
+(3455,2)       0.0039
+(3459,2)       0.0028
+(3498,2)       0.0017
+(3499,2)       0.0010
+(3501,2)       0.0005
+(3503,2)       0.0013
+(3504,2)       0.0009
+(3505,2)       0.0005
+(3506,2)       0.0088
+(3507,2)       0.0178
+(3508,2)       0.0370
+(3509,2)       0.0620
+(3510,2)       0.0769
+(3511,2)       0.0731
+(3512,2)       0.0491
+(3513,2)       0.0276
+(3514,2)       0.0121
+(3515,2)       0.0052
+(3557,2)       0.0017
+(3558,2)       0.0018
+(3559,2)       0.0019
+(3560,2)       0.0021
+(3561,2)       0.0012
+(3562,2)       0.0004
+(3563,2)       0.0027
+(3564,2)       0.0025
+(3565,2)       0.0024
+(3566,2)       0.0089
+(3567,2)       0.0258
+(3568,2)       0.0547
+(3569,2)       0.0853
+(3570,2)       0.1027
+(3571,2)       0.1001
+(3572,2)       0.0699
+(3573,2)       0.0407
+(3574,2)       0.0161
+(3575,2)       0.0061
+(3619,2)       0.0016
+(3620,2)       0.0072
+(3621,2)       0.0033
+(3622,2)       0.0033
+(3623,2)       0.0044
+(3624,2)       0.0062
+(3625,2)       0.0061
+(3626,2)       0.0124
+(3627,2)       0.0357
+(3628,2)       0.0708
+(3629,2)       0.0986
+(3630,2)       0.1107
+(3631,2)       0.1121
+(3632,2)       0.0840
+(3633,2)       0.0530
+(3634,2)       0.0186
+(3635,2)       0.0071
+(3636,2)       0.0014
+(3677,2)       0.0000
+(3680,2)       0.0069
+(3681,2)       0.0065
+(3682,2)       0.0082
+(3683,2)       0.0082
+(3684,2)       0.0094
+(3685,2)       0.0117
+(3686,2)       0.0225
+(3687,2)       0.0497
+(3688,2)       0.0879
+(3689,2)       0.1053
+(3690,2)       0.1089
+(3691,2)       0.1022
+(3692,2)       0.0879
+(3693,2)       0.0639
+(3694,2)       0.0217
+(3695,2)       0.0088
+(3696,2)       0.0012
+(3740,2)       0.0042
+(3741,2)       0.0069
+(3742,2)       0.0087
+(3743,2)       0.0081
+(3744,2)       0.0075
+(3745,2)       0.0126
+(3746,2)       0.0280
+(3747,2)       0.0627
+(3748,2)       0.1106
+(3749,2)       0.1209
+(3750,2)       0.1099
+(3751,2)       0.0950
+(3752,2)       0.0908
+(3753,2)       0.0749
+(3754,2)       0.0301
+(3755,2)       0.0124
+(3800,2)       0.0010
+(3801,2)       0.0074
+(3802,2)       0.0070
+(3803,2)       0.0040
+(3804,2)       0.0050
+(3805,2)       0.0095
+(3806,2)       0.0217
+(3807,2)       0.0648
+(3808,2)       0.1299
+(3809,2)       0.1508
+(3810,2)       0.1180
+(3811,2)       0.1001
+(3812,2)       0.0898
+(3813,2)       0.0825
+(3814,2)       0.0421
+(3815,2)       0.0182
+(3861,2)       0.0037
+(3862,2)       0.0042
+(3863,2)       0.0032
+(3864,2)       0.0063
+(3865,2)       0.0060
+(3866,2)       0.0137
+(3867,2)       0.0522
+(3868,2)       0.1423
+(3869,2)       0.1906
+(3870,2)       0.1390
+(3871,2)       0.1132
+(3872,2)       0.0917
+(3873,2)       0.0859
+(3874,2)       0.0506
+(3875,2)       0.0209
+(3877,2)       0.0002
+(3878,2)       0.0001
+(3922,2)       0.0019
+(3923,2)       0.0023
+(3924,2)       0.0057
+(3925,2)       0.0087
+(3926,2)       0.0110
+(3927,2)       0.0366
+(3928,2)       0.1464
+(3929,2)       0.2346
+(3930,2)       0.1653
+(3931,2)       0.1247
+(3932,2)       0.0998
+(3933,2)       0.0875
+(3934,2)       0.0520
+(3935,2)       0.0243
+(3937,2)       0.0005
+(3982,2)       0.0050
+(3984,2)       0.0047
+(3985,2)       0.0117
+(3986,2)       0.0095
+(3987,2)       0.0284
+(3988,2)       0.1223
+(3989,2)       0.2474
+(3990,2)       0.1795
+(3991,2)       0.1318
+(3992,2)       0.1087
+(3993,2)       0.0892
+(3994,2)       0.0549
+(3995,2)       0.0233
+(3996,2)       0.0016
+(4001,2)       0.0046
+(4042,2)       0.0025
+(4044,2)       0.0051
+(4045,2)       0.0093
+(4046,2)       0.0077
+(4047,2)       0.0197
+(4048,2)       0.0746
+(4049,2)       0.1985
+(4050,2)       0.1758
+(4051,2)       0.1313
+(4052,2)       0.1117
+(4053,2)       0.0919
+(4054,2)       0.0551
+(4055,2)       0.0174
+(4056,2)       0.0016
+(4057,2)       0.0005
+(4104,2)       0.0050
+(4105,2)       0.0061
+(4106,2)       0.0063
+(4107,2)       0.0096
+(4108,2)       0.0379
+(4109,2)       0.1129
+(4110,2)       0.1484
+(4111,2)       0.1256
+(4112,2)       0.1117
+(4113,2)       0.0908
+(4114,2)       0.0470
+(4115,2)       0.0108
+(4116,2)       0.0052
+(4162,2)       0.0009
+(4163,2)       0.0014
+(4164,2)       0.0078
+(4165,2)       0.0054
+(4166,2)       0.0011
+(4167,2)       0.0022
+(4168,2)       0.0149
+(4169,2)       0.0448
+(4170,2)       0.0953
+(4171,2)       0.1087
+(4172,2)       0.1027
+(4173,2)       0.0795
+(4174,2)       0.0300
+(4175,2)       0.0046
+(4176,2)       0.0023
+(4222,2)       0.0039
+(4223,2)       0.0027
+(4224,2)       0.0031
+(4225,2)       0.0016
+(4227,2)       0.0013
+(4228,2)       0.0021
+(4229,2)       0.0114
+(4230,2)       0.0416
+(4231,2)       0.0687
+(4232,2)       0.0756
+(4233,2)       0.0607
+(4234,2)       0.0144
+(4235,2)       0.0007
+(4281,2)       0.0053
+(4282,2)       0.0001
+(4286,2)       0.0003
+(4287,2)       0.0038
+(4290,2)       0.0084
+(4291,2)       0.0234
+(4292,2)       0.0455
+(4293,2)       0.0447
+(4294,2)       0.0043
+(4346,2)       0.0018
+(4347,2)       0.0058
+(4351,2)       0.0019
+(4352,2)       0.0203
+(4353,2)       0.0349
+(4406,2)       0.0037
+(4407,2)       0.0075
+(4412,2)       0.0067
+(4413,2)       0.0305
+(4414,2)       0.0008
+(4473,2)       0.0231
+(4474,2)       0.0121
+(4533,2)       0.0102
+(4534,2)       0.0254
+(4593,2)       0.0037
+(4594,2)       0.0341
+(4653,2)       0.0007
+(4654,2)       0.0297
+(4655,2)       0.0084
+(4714,2)       0.0209
+(4715,2)       0.0208
+(4774,2)       0.0115
+(1106,3)       0.0221
+(1107,3)       0.0221
+(1165,3)       0.0261
+(1166,3)       0.0414
+(1167,3)       0.0414
+(1168,3)       0.0221
+(1225,3)       0.0499
+(1226,3)       0.0791
+(1227,3)       0.0791
+(1228,3)       0.0548
+(1229,3)       0.0351
+(1285,3)       0.0816
+(1286,3)       0.1197
+(1287,3)       0.1541
+(1288,3)       0.1229
+(1289,3)       0.0689
+(1290,3)       0.0351
+(1345,3)       0.0816
+(1346,3)       0.1601
+(1347,3)       0.1919
+(1348,3)       0.1889
+(1349,3)       0.1467
+(1350,3)       0.1056
+(1351,3)       0.0478
+(1352,3)       0.0472
+(1405,3)       0.0624
+(1406,3)       0.1243
+(1407,3)       0.1919
+(1408,3)       0.1889
+(1409,3)       0.1659
+(1410,3)       0.1470
+(1411,3)       0.1260
+(1412,3)       0.1156
+(1413,3)       0.0726
+(1414,3)       0.0232
+(1465,3)       0.0321
+(1466,3)       0.1009
+(1467,3)       0.1243
+(1468,3)       0.1265
+(1469,3)       0.1470
+(1470,3)       0.1470
+(1471,3)       0.1260
+(1472,3)       0.1260
+(1473,3)       0.1045
+(1474,3)       0.0726
+(1525,3)       0.0202
+(1526,3)       0.0700
+(1527,3)       0.0915
+(1528,3)       0.0798
+(1529,3)       0.0984
+(1530,3)       0.1031
+(1531,3)       0.1045
+(1532,3)       0.1430
+(1533,3)       0.1045
+(1534,3)       0.0928
+(1585,3)       0.0202
+(1586,3)       0.0613
+(1587,3)       0.0700
+(1588,3)       0.0698
+(1589,3)       0.0798
+(1590,3)       0.0839
+(1591,3)       0.0839
+(1592,3)       0.1045
+(1593,3)       0.1042
+(1594,3)       0.0702
+(1645,3)       0.0211
+(1646,3)       0.0613
+(1647,3)       0.0643
+(1648,3)       0.0643
+(1649,3)       0.0713
+(1650,3)       0.0785
+(1651,3)       0.0811
+(1652,3)       0.0842
+(1653,3)       0.0811
+(1654,3)       0.0367
+(1705,3)       0.0273
+(1706,3)       0.0746
+(1707,3)       0.0757
+(1708,3)       0.0713
+(1709,3)       0.0757
+(1710,3)       0.0803
+(1711,3)       0.0837
+(1712,3)       0.0933
+(1713,3)       0.0916
+(1765,3)       0.0273
+(1766,3)       0.0746
+(1767,3)       0.0772
+(1768,3)       0.0819
+(1769,3)       0.0837
+(1770,3)       0.0899
+(1771,3)       0.0938
+(1772,3)       0.0938
+(1773,3)       0.0916
+(1826,3)       0.0439
+(1827,3)       0.0768
+(1828,3)       0.0961
+(1829,3)       0.0979
+(1830,3)       0.1073
+(1831,3)       0.1170
+(1832,3)       0.0938
+(1833,3)       0.0499
+(1886,3)       0.0233
+(1887,3)       0.0624
+(1888,3)       0.0979
+(1889,3)       0.1026
+(1890,3)       0.1073
+(1891,3)       0.1073
+(1892,3)       0.0783
+(1947,3)       0.0270
+(1948,3)       0.0624
+(1949,3)       0.0886
+(1950,3)       0.0886
+(1951,3)       0.0783
+(1952,3)       0.0209
+(2008,3)       0.0270
+(2009,3)       0.0287
+(2010,3)       0.0287
+(2011,3)       0.0209
+(3517,4)       0.0363
+(3576,4)       0.0483
+(3577,4)       0.0789
+(3578,4)       0.0363
+(3636,4)       0.1387
+(3637,4)       0.1387
+(3638,4)       0.0789
+(3696,4)       0.3056
+(3697,4)       0.3056
+(3698,4)       0.0873
+(3755,4)       0.0352
+(3756,4)       0.3360
+(3757,4)       0.3360
+(3758,4)       0.0873
+(3759,4)       0.0435
+(3815,4)       0.0889
+(3816,4)       0.3360
+(3817,4)       0.3360
+(3818,4)       0.0548
+(3819,4)       0.0435
+(3875,4)       0.1263
+(3876,4)       0.2057
+(3877,4)       0.2057
+(3878,4)       0.0521
+(3879,4)       0.0337
+(3935,4)       0.1263
+(3936,4)       0.1412
+(3937,4)       0.1412
+(3938,4)       0.0458
+(3939,4)       0.0337
+(3995,4)       0.0951
+(3996,4)       0.1148
+(3997,4)       0.1129
+(3998,4)       0.0512
+(3999,4)       0.0376
+(4055,4)       0.0733
+(4056,4)       0.0924
+(4057,4)       0.0735
+(4058,4)       0.0604
+(4059,4)       0.0456
+(4115,4)       0.0550
+(4116,4)       0.0716
+(4117,4)       0.0635
+(4118,4)       0.0593
+(4119,4)       0.0456
+(4175,4)       0.0462
+(4176,4)       0.0550
+(4177,4)       0.0587
+(4178,4)       0.0500
+(4179,4)       0.0443
+(4234,4)       0.0349
+(4235,4)       0.0402
+(4236,4)       0.0462
+(4237,4)       0.0484
+(4238,4)       0.0443
+(4239,4)       0.0362
+(4295,4)       0.0350
+(4296,4)       0.0402
+(4297,4)       0.0402
+(4298,4)       0.0362
+(1929,5)       0.0168
+(1930,5)       0.0218
+(1931,5)       0.0218
+(1989,5)       0.0241
+(1990,5)       0.0339
+(1991,5)       0.0350
+(1992,5)       0.0287
+(2049,5)       0.0339
+(2050,5)       0.0455
+(2051,5)       0.0555
+(2052,5)       0.0555
+(2053,5)       0.0357
+(2054,5)       0.0219
+(2108,5)       0.0194
+(2109,5)       0.0455
+(2110,5)       0.0611
+(2111,5)       0.0795
+(2112,5)       0.0795
+(2113,5)       0.0662
+(2114,5)       0.0450
+(2115,5)       0.0310
+(2168,5)       0.0226
+(2169,5)       0.0611
+(2170,5)       0.0795
+(2171,5)       0.0949
+(2172,5)       0.0949
+(2173,5)       0.0835
+(2174,5)       0.0712
+(2175,5)       0.0527
+(2176,5)       0.0310
+(2228,5)       0.0261
+(2229,5)       0.0767
+(2230,5)       0.0949
+(2231,5)       0.1045
+(2232,5)       0.1055
+(2233,5)       0.1045
+(2234,5)       0.0835
+(2235,5)       0.0760
+(2236,5)       0.0527
+(2237,5)       0.0292
+(2288,5)       0.0366
+(2289,5)       0.0895
+(2290,5)       0.1026
+(2291,5)       0.1146
+(2292,5)       0.1106
+(2293,5)       0.1082
+(2294,5)       0.0876
+(2295,5)       0.0841
+(2296,5)       0.0760
+(2297,5)       0.0341
+(2348,5)       0.0416
+(2349,5)       0.0998
+(2350,5)       0.1140
+(2351,5)       0.1167
+(2352,5)       0.1341
+(2353,5)       0.1269
+(2354,5)       0.0966
+(2355,5)       0.0868
+(2356,5)       0.0835
+(2357,5)       0.0341
+(2408,5)       0.0416
+(2409,5)       0.1052
+(2410,5)       0.1146
+(2411,5)       0.1354
+(2412,5)       0.1354
+(2413,5)       0.1325
+(2414,5)       0.1120
+(2415,5)       0.0881
+(2416,5)       0.0785
+(2417,5)       0.0247
+(2468,5)       0.0276
+(2469,5)       0.1052
+(2470,5)       0.1216
+(2471,5)       0.1528
+(2472,5)       0.1528
+(2473,5)       0.1394
+(2474,5)       0.1303
+(2475,5)       0.0989
+(2476,5)       0.0659
+(2529,5)       0.0856
+(2530,5)       0.1442
+(2531,5)       0.1571
+(2532,5)       0.1632
+(2533,5)       0.1528
+(2534,5)       0.1325
+(2535,5)       0.1220
+(2536,5)       0.0520
+(2589,5)       0.0550
+(2590,5)       0.1442
+(2591,5)       0.1572
+(2592,5)       0.1660
+(2593,5)       0.1657
+(2594,5)       0.1514
+(2595,5)       0.1303
+(2596,5)       0.0357
+(2649,5)       0.0284
+(2650,5)       0.0853
+(2651,5)       0.1442
+(2652,5)       0.1632
+(2653,5)       0.1657
+(2654,5)       0.1309
+(2655,5)       0.0899
+(2656,5)       0.0189
+(2710,5)       0.0357
+(2711,5)       0.0853
+(2712,5)       0.1089
+(2713,5)       0.1089
+(2714,5)       0.0899
+(2715,5)       0.0338
+(2770,5)       0.0182
+(2771,5)       0.0357
+(2772,5)       0.0436
+(2773,5)       0.0436
+(2774,5)       0.0338
+(2831,5)       0.0195
+(2832,5)       0.0249
+(2833,5)       0.0249
+(2892,5)       0.0183
+(2321,6)       0.0242
+(2322,6)       0.0336
+(2323,6)       0.0196
+(2380,6)       0.0242
+(2381,6)       0.0712
+(2382,6)       0.0822
+(2383,6)       0.0576
+(2440,6)       0.0712
+(2441,6)       0.1544
+(2442,6)       0.1771
+(2443,6)       0.1296
+(2444,6)       0.0576
+(2499,6)       0.0701
+(2500,6)       0.1423
+(2501,6)       0.1544
+(2502,6)       0.1771
+(2503,6)       0.1507
+(2504,6)       0.1114
+(2559,6)       0.1212
+(2560,6)       0.1423
+(2561,6)       0.1461
+(2562,6)       0.1464
+(2563,6)       0.1417
+(2564,6)       0.1171
+(2565,6)       0.0453
+(2618,6)       0.0468
+(2619,6)       0.1212
+(2620,6)       0.1353
+(2621,6)       0.1093
+(2622,6)       0.1093
+(2623,6)       0.1343
+(2624,6)       0.1343
+(2625,6)       0.1067
+(2678,6)       0.0803
+(2679,6)       0.1007
+(2680,6)       0.1021
+(2681,6)       0.0996
+(2682,6)       0.1000
+(2683,6)       0.1093
+(2684,6)       0.1343
+(2685,6)       0.1343
+(2686,6)       0.0422
+(2738,6)       0.0803
+(2739,6)       0.1007
+(2740,6)       0.1007
+(2741,6)       0.0866
+(2742,6)       0.0866
+(2743,6)       0.1016
+(2744,6)       0.1442
+(2745,6)       0.1442
+(2746,6)       0.0768
+(2747,6)       0.0198
+(2798,6)       0.0568
+(2799,6)       0.1007
+(2800,6)       0.1007
+(2801,6)       0.0858
+(2802,6)       0.0866
+(2803,6)       0.1145
+(2804,6)       0.1619
+(2805,6)       0.1619
+(2806,6)       0.0768
+(2807,6)       0.0198
+(2858,6)       0.0354
+(2859,6)       0.0818
+(2860,6)       0.0883
+(2861,6)       0.0866
+(2862,6)       0.0910
+(2863,6)       0.1393
+(2864,6)       0.1619
+(2865,6)       0.1619
+(2866,6)       0.0693
+(2918,6)       0.0254
+(2919,6)       0.0818
+(2920,6)       0.0887
+(2921,6)       0.0887
+(2922,6)       0.0957
+(2923,6)       0.1247
+(2924,6)       0.1393
+(2925,6)       0.1055
+(2926,6)       0.0432
+(2978,6)       0.0254
+(2979,6)       0.0791
+(2980,6)       0.0883
+(2981,6)       0.0883
+(2982,6)       0.0895
+(2983,6)       0.0971
+(2984,6)       0.1055
+(2985,6)       0.0432
+(3038,6)       0.0337
+(3039,6)       0.0451
+(3040,6)       0.0569
+(3041,6)       0.0534
+(3042,6)       0.0534
+(3043,6)       0.0470
+(3044,6)       0.0411
+(3098,6)       0.0310
+(3099,6)       0.0337
+  (28,7)       0.0218
+  (29,7)       0.0310
+  (30,7)       0.0572
+  (31,7)       0.0572
+  (32,7)       0.0434
+  (83,7)       0.0180
+  (84,7)       0.0180
+  (87,7)       0.0218
+  (88,7)       0.0340
+  (89,7)       0.0574
+  (90,7)       0.0803
+  (91,7)       0.0712
+  (92,7)       0.0678
+  (93,7)       0.0573
+  (94,7)       0.0197
+ (143,7)       0.0180
+ (144,7)       0.0178
+ (147,7)       0.0310
+ (148,7)       0.0522
+ (149,7)       0.0949
+ (150,7)       0.0919
+ (151,7)       0.0803
+ (152,7)       0.0678
+ (153,7)       0.0678
+ (154,7)       0.0573
+ (155,7)       0.0197
+ (202,7)       0.0192
+ (203,7)       0.0192
+ (207,7)       0.0508
+ (208,7)       0.1086
+ (209,7)       0.1086
+ (210,7)       0.0919
+ (211,7)       0.0678
+ (212,7)       0.0638
+ (213,7)       0.0619
+ (214,7)       0.0619
+ (215,7)       0.0483
+ (261,7)       0.0406
+ (262,7)       0.0406
+ (263,7)       0.0192
+ (267,7)       0.1086
+ (268,7)       0.1433
+ (269,7)       0.1409
+ (270,7)       0.0903
+ (271,7)       0.0665
+ (272,7)       0.0599
+ (273,7)       0.0589
+ (274,7)       0.0594
+ (275,7)       0.0545
+ (276,7)       0.0238
+ (321,7)       0.0966
+ (322,7)       0.0966
+ (326,7)       0.0271
+ (327,7)       0.1765
+ (328,7)       0.1765
+ (329,7)       0.1430
+ (330,7)       0.0903
+ (331,7)       0.0689
+ (332,7)       0.0589
+ (333,7)       0.0567
+ (334,7)       0.0594
+ (335,7)       0.0596
+ (336,7)       0.0411
+ (381,7)       0.1032
+ (382,7)       0.1032
+ (385,7)       0.0181
+ (386,7)       0.0511
+ (387,7)       0.1765
+ (388,7)       0.1765
+ (389,7)       0.1430
+ (390,7)       0.1143
+ (391,7)       0.0878
+ (392,7)       0.0689
+ (393,7)       0.0596
+ (394,7)       0.0724
+ (395,7)       0.0750
+ (396,7)       0.0634
+ (441,7)       0.0779
+ (442,7)       0.0779
+ (445,7)       0.0246
+ (446,7)       0.0868
+ (447,7)       0.1171
+ (448,7)       0.1765
+ (449,7)       0.1734
+ (450,7)       0.1430
+ (451,7)       0.1143
+ (452,7)       0.0898
+ (453,7)       0.0750
+ (454,7)       0.0926
+ (455,7)       0.0771
+ (456,7)       0.0713
+ (501,7)       0.0243
+ (502,7)       0.0243
+ (505,7)       0.0384
+ (506,7)       0.1171
+ (507,7)       0.1171
+ (508,7)       0.1720
+ (509,7)       0.1720
+ (510,7)       0.1720
+ (511,7)       0.1283
+ (512,7)       0.1064
+ (513,7)       0.0926
+ (514,7)       0.0926
+ (515,7)       0.0796
+ (516,7)       0.0713
+ (565,7)       0.0555
+ (566,7)       0.0911
+ (567,7)       0.0911
+ (568,7)       0.0855
+ (569,7)       0.0855
+ (570,7)       0.1502
+ (571,7)       0.1259
+ (572,7)       0.1074
+ (573,7)       0.0926
+ (574,7)       0.0829
+ (575,7)       0.0713
+ (576,7)       0.0191
+ (625,7)       0.0591
+ (626,7)       0.0715
+ (627,7)       0.0616
+ (628,7)       0.0541
+ (629,7)       0.0500
+ (630,7)       0.0855
+ (631,7)       0.0617
+ (632,7)       0.0747
+ (633,7)       0.0457
+ (634,7)       0.0286
+ (635,7)       0.0191
+ (684,7)       0.0260
+ (685,7)       0.0493
+ (686,7)       0.0591
+ (687,7)       0.0496
+ (688,7)       0.0494
+ (689,7)       0.0362
+ (745,7)       0.0349
+ (746,7)       0.0496
+ (747,7)       0.0494
+ (748,7)       0.0362
+ (805,7)       0.0260
+ (806,7)       0.0330
+ (807,7)       0.0354
+ (808,7)       0.0183
+ (866,7)       0.0302
+ (867,7)       0.0302
+(1223,8)       0.0290
+(1224,8)       0.0296
+(1225,8)       0.0252
+(1283,8)       0.0312
+(1284,8)       0.0453
+(1285,8)       0.0453
+(1343,8)       0.0339
+(1344,8)       0.0755
+(1345,8)       0.0991
+(1346,8)       0.0420
+(1403,8)       0.0755
+(1404,8)       0.1563
+(1405,8)       0.1521
+(1406,8)       0.0991
+(1463,8)       0.1563
+(1464,8)       0.2437
+(1465,8)       0.2437
+(1466,8)       0.1402
+(1467,8)       0.0607
+(1522,8)       0.0448
+(1523,8)       0.2081
+(1524,8)       0.2481
+(1525,8)       0.2481
+(1526,8)       0.1402
+(1527,8)       0.0835
+(1528,8)       0.0554
+(1582,8)       0.0825
+(1583,8)       0.2060
+(1584,8)       0.2188
+(1585,8)       0.2060
+(1586,8)       0.1091
+(1587,8)       0.0807
+(1588,8)       0.0666
+(1589,8)       0.0459
+(1642,8)       0.0969
+(1643,8)       0.1540
+(1644,8)       0.1946
+(1645,8)       0.1541
+(1646,8)       0.0835
+(1647,8)       0.0669
+(1648,8)       0.0666
+(1649,8)       0.0538
+(1702,8)       0.1024
+(1703,8)       0.1156
+(1704,8)       0.1540
+(1705,8)       0.1156
+(1706,8)       0.0689
+(1707,8)       0.0539
+(1708,8)       0.0539
+(1709,8)       0.0538
+(1762,8)       0.1007
+(1763,8)       0.1025
+(1764,8)       0.1103
+(1765,8)       0.0876
+(1766,8)       0.0689
+(1767,8)       0.0538
+(1768,8)       0.0538
+(1769,8)       0.0538
+(1822,8)       0.0855
+(1823,8)       0.0876
+(1824,8)       0.0876
+(1825,8)       0.0774
+(1826,8)       0.0730
+(1827,8)       0.0638
+(1828,8)       0.0583
+(1829,8)       0.0530
+(1882,8)       0.0677
+(1883,8)       0.0757
+(1884,8)       0.0757
+(1885,8)       0.0732
+(1886,8)       0.0730
+(1887,8)       0.0667
+(1888,8)       0.0638
+(1889,8)       0.0530
+(1942,8)       0.0487
+(1943,8)       0.0677
+(1944,8)       0.0730
+(1945,8)       0.0636
+(1946,8)       0.0638
+(1947,8)       0.0658
+(1948,8)       0.0638
+(1949,8)       0.0355
+(2002,8)       0.0257
+(2003,8)       0.0487
+(2004,8)       0.0594
+(2005,8)       0.0594
+(2006,8)       0.0594
+(2007,8)       0.0560
+(2008,8)       0.0456
+(2063,8)       0.0257
+(2064,8)       0.0377
+(2065,8)       0.0427
+(2066,8)       0.0481
+(2067,8)       0.0427
+(2126,8)       0.0265
+(3439,9)       0.0337
+(3498,9)       0.0409
+(3499,9)       0.0451
+(3500,9)       0.0409
+(3558,9)       0.0740
+(3559,9)       0.0740
+(3560,9)       0.0443
+(3617,9)       0.0667
+(3618,9)       0.1411
+(3619,9)       0.1411
+(3620,9)       0.0330
+(3676,9)       0.0328
+(3677,9)       0.1140
+(3678,9)       0.2352
+(3679,9)       0.2352
+(3680,9)       0.0330
+(3736,9)       0.0328
+(3737,9)       0.1140
+(3738,9)       0.3063
+(3739,9)       0.3063
+(3740,9)       0.0429
+(3797,9)       0.0533
+(3798,9)       0.3063
+(3799,9)       0.3063
+(3800,9)       0.0643
+(3858,9)       0.2166
+(3859,9)       0.2166
+(3860,9)       0.1113
+(3918,9)       0.1331
+(3919,9)       0.2114
+(3920,9)       0.1715
+(3921,9)       0.0318
+(3978,9)       0.1015
+(3979,9)       0.1926
+(3980,9)       0.1926
+(3981,9)       0.0589
+(4037,9)       0.0308
+(4038,9)       0.0817
+(4039,9)       0.1408
+(4040,9)       0.1408
+(4041,9)       0.0837
+(4042,9)       0.0373
+(4097,9)       0.0360
+(4098,9)       0.0688
+(4099,9)       0.0861
+(4100,9)       0.0930
+(4101,9)       0.0837
+(4102,9)       0.0567
+(4157,9)       0.0397
+(4158,9)       0.0579
+(4159,9)       0.0688
+(4160,9)       0.0848
+(4161,9)       0.0577
+(4162,9)       0.0428
+(4217,9)       0.0343
+(4218,9)       0.0459
+(4219,9)       0.0531
+(4220,9)       0.0531
+(4221,9)       0.0428
+(4222,9)       0.0355
+(4278,9)       0.0343
+(4279,9)       0.0343
+(4239,10)      0.0319
+(4240,10)      0.0370
+(4241,10)      0.0335
+(4299,10)      0.0513
+(4300,10)      0.0513
+(4301,10)      0.0379
+(4306,10)      0.0298
+(4307,10)      0.0270
+(4357,10)      0.0319
+(4358,10)      0.0563
+(4359,10)      0.0563
+(4360,10)      0.0513
+(4361,10)      0.0379
+(4365,10)      0.0308
+(4366,10)      0.0351
+(4367,10)      0.0331
+(4417,10)      0.0742
+(4418,10)      0.1205
+(4419,10)      0.0727
+(4420,10)      0.0513
+(4421,10)      0.0332
+(4424,10)      0.0308
+(4425,10)      0.0362
+(4426,10)      0.0397
+(4427,10)      0.0379
+(4476,10)      0.0742
+(4477,10)      0.1773
+(4478,10)      0.2000
+(4479,10)      0.1337
+(4480,10)      0.0568
+(4481,10)      0.0331
+(4482,10)      0.0275
+(4483,10)      0.0275
+(4484,10)      0.0351
+(4485,10)      0.0419
+(4486,10)      0.0463
+(4487,10)      0.0435
+(4535,10)      0.0455
+(4536,10)      0.1548
+(4537,10)      0.2099
+(4538,10)      0.2526
+(4539,10)      0.2526
+(4540,10)      0.1190
+(4541,10)      0.0509
+(4542,10)      0.0331
+(4543,10)      0.0419
+(4544,10)      0.0423
+(4545,10)      0.0472
+(4546,10)      0.0474
+(4547,10)      0.0463
+(4595,10)      0.0789
+(4596,10)      0.1451
+(4597,10)      0.1828
+(4598,10)      0.2486
+(4599,10)      0.2411
+(4600,10)      0.1850
+(4601,10)      0.0675
+(4602,10)      0.0509
+(4603,10)      0.0447
+(4604,10)      0.0447
+(4605,10)      0.0468
+(4606,10)      0.0468
+(4607,10)      0.0400
+(4655,10)      0.0839
+(4656,10)      0.1111
+(4657,10)      0.1451
+(4658,10)      0.1828
+(4659,10)      0.1850
+(4660,10)      0.1794
+(4661,10)      0.0978
+(4662,10)      0.0576
+(4663,10)      0.0505
+(4664,10)      0.0423
+(4665,10)      0.0406
+(4666,10)      0.0405
+(4667,10)      0.0316
+(4714,10)      0.0375
+(4715,10)      0.0839
+(4716,10)      0.0983
+(4717,10)      0.1116
+(4718,10)      0.1435
+(4719,10)      0.1765
+(4720,10)      0.1541
+(4721,10)      0.1289
+(4722,10)      0.0660
+(4723,10)      0.0505
+(4724,10)      0.0389
+(4725,10)      0.0360
+(4726,10)      0.0354
+(4775,10)      0.0481
+(4776,10)      0.0839
+(4777,10)      0.0983
+(4778,10)      0.1116
+(4779,10)      0.1393
+(4780,10)      0.1296
+(4781,10)      0.0660
+(4782,10)      0.0505
+(4783,10)      0.0360
+(4784,10)      0.0354
+(4785,10)      0.0351
+ (760,11)      0.0292
+ (761,11)      0.0386
+ (762,11)      0.0326
+ (763,11)      0.0326
+ (819,11)      0.0292
+ (820,11)      0.0386
+ (821,11)      0.0651
+ (822,11)      0.0535
+ (823,11)      0.0535
+ (824,11)      0.0431
+ (825,11)      0.0317
+ (879,11)      0.0368
+ (880,11)      0.0656
+ (881,11)      0.0857
+ (882,11)      0.0832
+ (883,11)      0.0832
+ (884,11)      0.0813
+ (885,11)      0.0589
+ (886,11)      0.0317
+ (939,11)      0.0368
+ (940,11)      0.0871
+ (941,11)      0.0922
+ (942,11)      0.0871
+ (943,11)      0.0901
+ (944,11)      0.0901
+ (945,11)      0.0902
+ (946,11)      0.0589
+ (947,11)      0.0298
+ (999,11)      0.0365
+(1000,11)      0.0977
+(1001,11)      0.0978
+(1002,11)      0.0978
+(1003,11)      0.0962
+(1004,11)      0.0991
+(1005,11)      0.1106
+(1006,11)      0.0954
+(1007,11)      0.0380
+(1059,11)      0.0283
+(1060,11)      0.0977
+(1061,11)      0.1078
+(1062,11)      0.1189
+(1063,11)      0.1195
+(1064,11)      0.1242
+(1065,11)      0.1281
+(1066,11)      0.1227
+(1067,11)      0.0421
+(1068,11)      0.0351
+(1120,11)      0.0790
+(1121,11)      0.1195
+(1122,11)      0.1344
+(1123,11)      0.1673
+(1124,11)      0.1673
+(1125,11)      0.1782
+(1126,11)      0.1492
+(1127,11)      0.0528
+(1128,11)      0.0380
+(1180,11)      0.0480
+(1181,11)      0.1341
+(1182,11)      0.1610
+(1183,11)      0.1875
+(1184,11)      0.1968
+(1185,11)      0.1824
+(1186,11)      0.1804
+(1187,11)      0.0528
+(1188,11)      0.0278
+(1241,11)      0.0605
+(1242,11)      0.1374
+(1243,11)      0.2521
+(1244,11)      0.2521
+(1245,11)      0.1968
+(1246,11)      0.1804
+(1247,11)      0.0280
+(1302,11)      0.1066
+(1303,11)      0.1413
+(1304,11)      0.1968
+(1305,11)      0.1804
+(1306,11)      0.1052
+(1362,11)      0.0453
+(1363,11)      0.0605
+(1364,11)      0.1302
+(1365,11)      0.1052
+(1366,11)      0.0345
+(1424,11)      0.0530
+(1425,11)      0.0345
+(4141,12)      0.0361
+(4142,12)      0.0379
+(4201,12)      0.0443
+(4202,12)      0.0463
+(4203,12)      0.0379
+(4261,12)      0.0463
+(4262,12)      0.0539
+(4263,12)      0.0476
+(4264,12)      0.0484
+(4321,12)      0.0519
+(4322,12)      0.0597
+(4323,12)      0.0556
+(4324,12)      0.0539
+(4381,12)      0.0597
+(4382,12)      0.0855
+(4383,12)      0.0689
+(4384,12)      0.0539
+(4385,12)      0.0391
+(4441,12)      0.0934
+(4442,12)      0.1138
+(4443,12)      0.0855
+(4444,12)      0.0689
+(4501,12)      0.1206
+(4502,12)      0.1596
+(4503,12)      0.1240
+(4504,12)      0.0843
+(4561,12)      0.1632
+(4562,12)      0.2418
+(4563,12)      0.1632
+(4564,12)      0.1240
+(4621,12)      0.2496
+(4622,12)      0.2860
+(4623,12)      0.2496
+(4624,12)      0.1627
+(4625,12)      0.0492
+(4681,12)      0.3585
+(4682,12)      0.3585
+(4683,12)      0.2774
+(4684,12)      0.1842
+(4685,12)      0.0565
+(4742,12)      0.2860
+(4743,12)      0.1850
+(4744,12)      0.0633
+(2677,13)      0.0252
+(2736,13)      0.0271
+(2737,13)      0.0355
+(2738,13)      0.0355
+(2795,13)      0.0223
+(2796,13)      0.0381
+(2797,13)      0.0602
+(2798,13)      0.0602
+(2855,13)      0.0253
+(2856,13)      0.0381
+(2857,13)      0.0699
+(2858,13)      0.0699
+(2913,13)      0.0220
+(2914,13)      0.0224
+(2915,13)      0.0250
+(2916,13)      0.0381
+(2917,13)      0.0434
+(2918,13)      0.0434
+(2972,13)      0.0224
+(2973,13)      0.0225
+(2974,13)      0.0230
+(2975,13)      0.0253
+(2976,13)      0.0337
+(2977,13)      0.0423
+(2978,13)      0.0337
+(3032,13)      0.0201
+(3033,13)      0.0225
+(3034,13)      0.0286
+(3035,13)      0.0426
+(3036,13)      0.0423
+(3037,13)      0.0341
+(3038,13)      0.0322
+(3092,13)      0.0220
+(3093,13)      0.0233
+(3094,13)      0.0519
+(3095,13)      0.0559
+(3096,13)      0.0445
+(3097,13)      0.0341
+(3098,13)      0.0288
+(3152,13)      0.0201
+(3153,13)      0.0233
+(3154,13)      0.0434
+(3155,13)      0.0569
+(3156,13)      0.0541
+(3157,13)      0.0445
+(3158,13)      0.0290
+(3159,13)      0.0243
+(3214,13)      0.0254
+(3215,13)      0.0540
+(3216,13)      0.0540
+(3217,13)      0.0459
+(3218,13)      0.0407
+(3219,13)      0.0290
+(3220,13)      0.0246
+(3275,13)      0.0302
+(3276,13)      0.0459
+(3277,13)      0.0484
+(3278,13)      0.0459
+(3279,13)      0.0400
+(3280,13)      0.0318
+(3281,13)      0.0246
+(3335,13)      0.0255
+(3336,13)      0.0353
+(3337,13)      0.0484
+(3338,13)      0.0484
+(3339,13)      0.0440
+(3340,13)      0.0346
+(3341,13)      0.0318
+(3342,13)      0.0246
+(3395,13)      0.0255
+(3396,13)      0.0303
+(3397,13)      0.0477
+(3398,13)      0.0484
+(3399,13)      0.0471
+(3400,13)      0.0373
+(3401,13)      0.0318
+(3402,13)      0.0292
+(3455,13)      0.0281
+(3456,13)      0.0370
+(3457,13)      0.0477
+(3458,13)      0.0477
+(3459,13)      0.0471
+(3460,13)      0.0373
+(3461,13)      0.0318
+(3462,13)      0.0286
+(3463,13)      0.0270
+(3515,13)      0.0283
+(3516,13)      0.0370
+(3517,13)      0.0496
+(3518,13)      0.0501
+(3519,13)      0.0516
+(3520,13)      0.0411
+(3521,13)      0.0373
+(3522,13)      0.0292
+(3523,13)      0.0270
+(3575,13)      0.0243
+(3576,13)      0.0283
+(3577,13)      0.0496
+(3578,13)      0.0580
+(3579,13)      0.0602
+(3580,13)      0.0580
+(3581,13)      0.0406
+(3582,13)      0.0394
+(3583,13)      0.0286
+(3635,13)      0.0238
+(3636,13)      0.0244
+(3637,13)      0.0347
+(3638,13)      0.0602
+(3639,13)      0.0681
+(3640,13)      0.0716
+(3641,13)      0.0654
+(3642,13)      0.0406
+(3643,13)      0.0394
+(3695,13)      0.0210
+(3696,13)      0.0243
+(3697,13)      0.0244
+(3698,13)      0.0466
+(3699,13)      0.0723
+(3700,13)      0.0784
+(3701,13)      0.1226
+(3702,13)      0.0714
+(3703,13)      0.0397
+(3758,13)      0.0466
+(3759,13)      0.0781
+(3760,13)      0.1309
+(3761,13)      0.1733
+(3762,13)      0.1226
+(3763,13)      0.0715
+(3764,13)      0.0363
+(3818,13)      0.0649
+(3819,13)      0.0872
+(3820,13)      0.2001
+(3821,13)      0.2001
+(3822,13)      0.1733
+(3823,13)      0.1084
+(3824,13)      0.0715
+(3825,13)      0.0321
+(3878,13)      0.0819
+(3879,13)      0.0902
+(3880,13)      0.2001
+(3881,13)      0.2001
+(3882,13)      0.1733
+(3883,13)      0.1110
+(3884,13)      0.0875
+(3885,13)      0.0632
+(3938,13)      0.0819
+(3939,13)      0.0902
+(3940,13)      0.1567
+(3941,13)      0.1585
+(3942,13)      0.1556
+(3943,13)      0.1158
+(3944,13)      0.0882
+(3945,13)      0.0704
+(3997,13)      0.0280
+(3998,13)      0.0784
+(3999,13)      0.0888
+(4000,13)      0.1109
+(4001,13)      0.1510
+(4002,13)      0.1444
+(4003,13)      0.1197
+(4004,13)      0.0882
+(4005,13)      0.0704
+(4056,13)      0.0272
+(4057,13)      0.0417
+(4058,13)      0.0703
+(4059,13)      0.0882
+(4060,13)      0.1002
+(4061,13)      0.1109
+(4062,13)      0.1197
+(4063,13)      0.1108
+(4064,13)      0.0763
+(4065,13)      0.0529
+(4116,13)      0.0342
+(4117,13)      0.0417
+(4118,13)      0.0608
+(4119,13)      0.0818
+(4120,13)      0.0888
+(4121,13)      0.1002
+(4122,13)      0.1014
+(4123,13)      0.0868
+(4124,13)      0.0632
+(4125,13)      0.0370
+(4177,13)      0.0342
+(4178,13)      0.0460
+(4179,13)      0.0629
+(4180,13)      0.0695
+(4181,13)      0.0768
+(4182,13)      0.0768
+(4183,13)      0.0768
+(4184,13)      0.0458
+(4185,13)      0.0226
+(4238,13)      0.0214
+(4239,13)      0.0407
+(4240,13)      0.0628
+(4241,13)      0.0669
+(4242,13)      0.0663
+(4243,13)      0.0663
+(4244,13)      0.0380
+(4299,13)      0.0214
+(4300,13)      0.0415
+(4301,13)      0.0628
+(4302,13)      0.0628
+(4303,13)      0.0483
+(4304,13)      0.0254
+(4360,13)      0.0223
+(4361,13)      0.0422
+(4362,13)      0.0444
+(4363,13)      0.0429
+(4421,13)      0.0254
+(4422,13)      0.0257
+(4423,13)      0.0211
+(4482,13)      0.0211
+(1273,14)      0.0363
+(1274,14)      0.0386
+(1275,14)      0.0386
+(1323,14)      0.0362
+(1329,14)      0.0356
+(1330,14)      0.0382
+(1331,14)      0.0374
+(1332,14)      0.0374
+(1333,14)      0.0400
+(1334,14)      0.0403
+(1335,14)      0.0400
+(1382,14)      0.0418
+(1383,14)      0.0418
+(1384,14)      0.0413
+(1385,14)      0.0362
+(1388,14)      0.0382
+(1389,14)      0.0401
+(1390,14)      0.0401
+(1391,14)      0.0401
+(1392,14)      0.0418
+(1393,14)      0.0403
+(1394,14)      0.0403
+(1395,14)      0.0400
+(1396,14)      0.0368
+(1441,14)      0.0418
+(1442,14)      0.0576
+(1443,14)      0.0576
+(1444,14)      0.0498
+(1445,14)      0.0473
+(1446,14)      0.0457
+(1447,14)      0.0457
+(1448,14)      0.0417
+(1449,14)      0.0413
+(1450,14)      0.0413
+(1451,14)      0.0430
+(1452,14)      0.0471
+(1453,14)      0.0465
+(1454,14)      0.0433
+(1455,14)      0.0400
+(1456,14)      0.0387
+(1457,14)      0.0368
+(1501,14)      0.0576
+(1502,14)      0.0675
+(1503,14)      0.0682
+(1504,14)      0.0658
+(1505,14)      0.0658
+(1506,14)      0.0497
+(1507,14)      0.0503
+(1508,14)      0.0457
+(1509,14)      0.0480
+(1510,14)      0.0457
+(1511,14)      0.0480
+(1512,14)      0.0495
+(1513,14)      0.0495
+(1514,14)      0.0457
+(1515,14)      0.0433
+(1516,14)      0.0421
+(1517,14)      0.0387
+(1518,14)      0.0368
+(1561,14)      0.0675
+(1562,14)      0.0780
+(1563,14)      0.0840
+(1564,14)      0.0683
+(1565,14)      0.0663
+(1566,14)      0.0584
+(1567,14)      0.0503
+(1568,14)      0.0476
+(1569,14)      0.0503
+(1570,14)      0.0480
+(1571,14)      0.0480
+(1572,14)      0.0495
+(1573,14)      0.0518
+(1574,14)      0.0518
+(1575,14)      0.0453
+(1576,14)      0.0430
+(1577,14)      0.0387
+(1578,14)      0.0376
+(1621,14)      0.0678
+(1622,14)      0.0907
+(1623,14)      0.1119
+(1624,14)      0.0840
+(1625,14)      0.0663
+(1626,14)      0.0584
+(1627,14)      0.0508
+(1628,14)      0.0503
+(1629,14)      0.0514
+(1630,14)      0.0505
+(1631,14)      0.0476
+(1632,14)      0.0476
+(1633,14)      0.0518
+(1634,14)      0.0519
+(1635,14)      0.0501
+(1636,14)      0.0433
+(1637,14)      0.0413
+(1638,14)      0.0376
+(1681,14)      0.0636
+(1682,14)      0.1234
+(1683,14)      0.1498
+(1684,14)      0.1119
+(1685,14)      0.0687
+(1686,14)      0.0584
+(1687,14)      0.0558
+(1688,14)      0.0508
+(1689,14)      0.0506
+(1690,14)      0.0454
+(1691,14)      0.0432
+(1692,14)      0.0445
+(1693,14)      0.0472
+(1694,14)      0.0519
+(1695,14)      0.0519
+(1696,14)      0.0449
+(1697,14)      0.0417
+(1741,14)      0.0358
+(1742,14)      0.1234
+(1743,14)      0.2624
+(1744,14)      0.2624
+(1745,14)      0.0717
+(1746,14)      0.0617
+(1747,14)      0.0515
+(1748,14)      0.0506
+(1749,14)      0.0446
+(1750,14)      0.0432
+(1751,14)      0.0366
+(1752,14)      0.0366
+(1753,14)      0.0397
+(1754,14)      0.0519
+(1755,14)      0.0519
+(1756,14)      0.0449
+(1757,14)      0.0413
+(1802,14)      0.0989
+(1803,14)      0.3488
+(1804,14)      0.3488
+(1805,14)      0.0717
+(1806,14)      0.0553
+(1807,14)      0.0446
+(1808,14)      0.0446
+(1809,14)      0.0444
+(1810,14)      0.0366
+(1814,14)      0.0434
+(1815,14)      0.0434
+(1816,14)      0.0419
+(1817,14)      0.0372
+(1862,14)      0.0560
+(1863,14)      0.2271
+(1864,14)      0.2271
+(1865,14)      0.0553
+(1866,14)      0.0414
+(1867,14)      0.0411
+(1868,14)      0.0444
+(1869,14)      0.0444
+(1874,14)      0.0424
+(1875,14)      0.0426
+(1876,14)      0.0419
+(1877,14)      0.0353
+(1923,14)      0.1368
+(1924,14)      0.1368
+(1925,14)      0.0526
+(1926,14)      0.0401
+(1927,14)      0.0399
+(1928,14)      0.0415
+(1929,14)      0.0399
+(1933,14)      0.0377
+(1934,14)      0.0406
+(1935,14)      0.0426
+(1936,14)      0.0424
+(1937,14)      0.0353
+(1983,14)      0.0670
+(1984,14)      0.0670
+(1985,14)      0.0356
+(1986,14)      0.0356
+(1988,14)      0.0414
+(1994,14)      0.0380
+(1995,14)      0.0406
+(1996,14)      0.0384
+(2044,14)      0.0356
+(2055,14)      0.0376
+(2056,14)      0.0376
+(2057,14)      0.0353
+(2116,14)      0.0367
+(2117,14)      0.0353
+(2176,14)      0.0353
+(2177,14)      0.0353
+(2656,15)      0.0154
+(2657,15)      0.0182
+(2658,15)      0.0159
+(2701,15)      0.0258
+(2702,15)      0.0379
+(2703,15)      0.0206
+(2704,15)      0.0181
+(2716,15)      0.0246
+(2717,15)      0.0246
+(2718,15)      0.0159
+(2761,15)      0.0518
+(2762,15)      0.0518
+(2763,15)      0.0388
+(2764,15)      0.0379
+(2765,15)      0.0206
+(2770,15)      0.0121
+(2771,15)      0.0130
+(2772,15)      0.0121
+(2774,15)      0.0131
+(2775,15)      0.0243
+(2776,15)      0.0253
+(2777,15)      0.0253
+(2778,15)      0.0130
+(2821,15)      0.0871
+(2822,15)      0.0871
+(2823,15)      0.0427
+(2824,15)      0.0388
+(2825,15)      0.0350
+(2826,15)      0.0281
+(2830,15)      0.0149
+(2831,15)      0.0165
+(2832,15)      0.0174
+(2833,15)      0.0177
+(2834,15)      0.0192
+(2835,15)      0.0253
+(2836,15)      0.0253
+(2837,15)      0.0246
+(2881,15)      0.0874
+(2882,15)      0.0874
+(2883,15)      0.0692
+(2884,15)      0.0388
+(2885,15)      0.0350
+(2886,15)      0.0350
+(2887,15)      0.0286
+(2888,15)      0.0121
+(2889,15)      0.0149
+(2890,15)      0.0166
+(2891,15)      0.0174
+(2892,15)      0.0230
+(2893,15)      0.0230
+(2894,15)      0.0281
+(2895,15)      0.0275
+(2896,15)      0.0261
+(2897,15)      0.0203
+(2941,15)      0.0767
+(2942,15)      0.0802
+(2943,15)      0.0692
+(2944,15)      0.0286
+(2945,15)      0.0253
+(2946,15)      0.0301
+(2947,15)      0.0392
+(2948,15)      0.0286
+(2949,15)      0.0258
+(2950,15)      0.0258
+(2951,15)      0.0292
+(2952,15)      0.0387
+(2953,15)      0.0387
+(2954,15)      0.0436
+(2955,15)      0.0417
+(2956,15)      0.0404
+(2957,15)      0.0235
+(2958,15)      0.0138
+(3001,15)      0.0635
+(3002,15)      0.0657
+(3003,15)      0.0576
+(3004,15)      0.0286
+(3005,15)      0.0193
+(3006,15)      0.0193
+(3007,15)      0.0482
+(3008,15)      0.0499
+(3009,15)      0.0487
+(3010,15)      0.0487
+(3011,15)      0.0487
+(3012,15)      0.0523
+(3013,15)      0.0488
+(3014,15)      0.0488
+(3015,15)      0.0441
+(3016,15)      0.0430
+(3017,15)      0.0404
+(3018,15)      0.0235
+(3061,15)      0.0601
+(3062,15)      0.0601
+(3063,15)      0.0467
+(3064,15)      0.0362
+(3065,15)      0.0259
+(3066,15)      0.0259
+(3067,15)      0.0499
+(3068,15)      0.0512
+(3069,15)      0.0536
+(3070,15)      0.0667
+(3071,15)      0.0609
+(3072,15)      0.0631
+(3073,15)      0.0631
+(3074,15)      0.0675
+(3075,15)      0.0845
+(3076,15)      0.0845
+(3077,15)      0.0761
+(3078,15)      0.0635
+(3079,15)      0.0448
+(3080,15)      0.0213
+(3121,15)      0.0463
+(3122,15)      0.0463
+(3123,15)      0.0467
+(3124,15)      0.0405
+(3125,15)      0.0362
+(3126,15)      0.0369
+(3127,15)      0.0482
+(3128,15)      0.0503
+(3129,15)      0.0536
+(3130,15)      0.0667
+(3131,15)      0.0633
+(3132,15)      0.0669
+(3133,15)      0.0675
+(3134,15)      0.0845
+(3135,15)      0.1069
+(3136,15)      0.1019
+(3137,15)      0.0983
+(3138,15)      0.0945
+(3139,15)      0.0873
+(3140,15)      0.0448
+(3141,15)      0.0144
+(3181,15)      0.0413
+(3182,15)      0.0429
+(3183,15)      0.0467
+(3184,15)      0.0419
+(3185,15)      0.0393
+(3186,15)      0.0393
+(3187,15)      0.0445
+(3188,15)      0.0445
+(3189,15)      0.0445
+(3190,15)      0.0501
+(3191,15)      0.0600
+(3192,15)      0.0633
+(3193,15)      0.0762
+(3194,15)      0.1074
+(3195,15)      0.1074
+(3196,15)      0.1063
+(3197,15)      0.0983
+(3198,15)      0.0994
+(3199,15)      0.0945
+(3200,15)      0.0873
+(3201,15)      0.0364
+(3202,15)      0.0156
+(3241,15)      0.0341
+(3242,15)      0.0413
+(3243,15)      0.0485
+(3244,15)      0.0485
+(3245,15)      0.0485
+(3246,15)      0.0432
+(3247,15)      0.0432
+(3248,15)      0.0428
+(3249,15)      0.0381
+(3250,15)      0.0383
+(3251,15)      0.0414
+(3252,15)      0.0541
+(3253,15)      0.0762
+(3254,15)      0.1081
+(3255,15)      0.1081
+(3256,15)      0.0983
+(3257,15)      0.0888
+(3258,15)      0.0916
+(3259,15)      0.0994
+(3260,15)      0.0890
+(3261,15)      0.0364
+(3262,15)      0.0170
+(3263,15)      0.0156
+(3264,15)      0.0161
+(3265,15)      0.0131
+(3301,15)      0.0341
+(3302,15)      0.0413
+(3303,15)      0.0664
+(3304,15)      0.0556
+(3305,15)      0.0507
+(3306,15)      0.0432
+(3307,15)      0.0385
+(3308,15)      0.0390
+(3309,15)      0.0381
+(3310,15)      0.0360
+(3311,15)      0.0323
+(3312,15)      0.0383
+(3313,15)      0.0541
+(3314,15)      0.1081
+(3315,15)      0.1081
+(3316,15)      0.0888
+(3317,15)      0.0870
+(3318,15)      0.0870
+(3319,15)      0.0916
+(3320,15)      0.0892
+(3321,15)      0.0364
+(3322,15)      0.0170
+(3323,15)      0.0156
+(3324,15)      0.0161
+(3325,15)      0.0136
+(3361,15)      0.0348
+(3362,15)      0.0664
+(3363,15)      0.0694
+(3364,15)      0.0664
+(3365,15)      0.0435
+(3366,15)      0.0320
+(3367,15)      0.0320
+(3368,15)      0.0385
+(3369,15)      0.0381
+(3370,15)      0.0315
+(3371,15)      0.0258
+(3372,15)      0.0258
+(3373,15)      0.0414
+(3374,15)      0.1204
+(3375,15)      0.1204
+(3376,15)      0.0954
+(3377,15)      0.0860
+(3378,15)      0.0860
+(3379,15)      0.0892
+(3380,15)      0.0892
+(3381,15)      0.0401
+(3382,15)      0.0150
+(3385,15)      0.0131
+(3421,15)      0.0491
+(3422,15)      0.0694
+(3423,15)      0.0694
+(3424,15)      0.0534
+(3425,15)      0.0221
+(3428,15)      0.0178
+(3429,15)      0.0233
+(3430,15)      0.0252
+(3431,15)      0.0249
+(3432,15)      0.0247
+(3433,15)      0.0247
+(3434,15)      0.1204
+(3435,15)      0.1204
+(3436,15)      0.1107
+(3437,15)      0.0860
+(3438,15)      0.0860
+(3439,15)      0.0949
+(3440,15)      0.0949
+(3441,15)      0.0460
+(3481,15)      0.0491
+(3482,15)      0.0616
+(3483,15)      0.0475
+(3484,15)      0.0221
+(3490,15)      0.0207
+(3491,15)      0.0207
+(3492,15)      0.0198
+(3493,15)      0.0198
+(3494,15)      0.0981
+(3495,15)      0.1111
+(3496,15)      0.1107
+(3497,15)      0.0857
+(3498,15)      0.0857
+(3499,15)      0.0949
+(3500,15)      0.0949
+(3501,15)      0.0460
+(3541,15)      0.0416
+(3542,15)      0.0475
+(3543,15)      0.0341
+(3550,15)      0.0207
+(3551,15)      0.0236
+(3552,15)      0.0235
+(3553,15)      0.0235
+(3554,15)      0.0655
+(3555,15)      0.1103
+(3556,15)      0.1103
+(3557,15)      0.0771
+(3558,15)      0.0771
+(3559,15)      0.0842
+(3560,15)      0.0842
+(3561,15)      0.0400
+(3601,15)      0.0306
+(3602,15)      0.0341
+(3603,15)      0.0207
+(3610,15)      0.0189
+(3611,15)      0.0235
+(3612,15)      0.0189
+(3613,15)      0.0209
+(3614,15)      0.0385
+(3615,15)      0.0674
+(3616,15)      0.0750
+(3617,15)      0.0715
+(3618,15)      0.0715
+(3619,15)      0.0676
+(3620,15)      0.0400
+(3621,15)      0.0226
+(3661,15)      0.0283
+(3662,15)      0.0283
+(3671,15)      0.0160
+(3672,15)      0.0151
+(3673,15)      0.0160
+(3674,15)      0.0232
+(3675,15)      0.0526
+(3676,15)      0.0647
+(3677,15)      0.0529
+(3678,15)      0.0386
+(3679,15)      0.0336
+(3680,15)      0.0226
+(3721,15)      0.0267
+(3722,15)      0.0267
+(3734,15)      0.0232
+(3735,15)      0.0278
+(3736,15)      0.0490
+(3781,15)      0.0267
+(3782,15)      0.0267
+(3783,15)      0.0162
+(3794,15)      0.0278
+(3795,15)      0.0278
+(3841,15)      0.0298
+(3842,15)      0.0316
+(3843,15)      0.0193
+(3853,15)      0.0123
+(3854,15)      0.0282
+(3855,15)      0.0282
+(3901,15)      0.0312
+(3902,15)      0.0324
+(3903,15)      0.0296
+(3913,15)      0.0123
+(3914,15)      0.0212
+(3915,15)      0.0212
+(3961,15)      0.0282
+(3962,15)      0.0312
+(3963,15)      0.0200
+(3974,15)      0.0210
+(4021,15)      0.0200
+(4022,15)      0.0282
+(4023,15)      0.0128
+(4082,15)      0.0128
+(4093,15)      0.0142
+(4094,15)      0.0142
+(1701,16)      0.0211
+(1760,16)      0.0186
+(1761,16)      0.0262
+(1762,16)      0.0232
+(1763,16)      0.0232
+(1764,16)      0.0304
+(1765,16)      0.0321
+(1766,16)      0.0321
+(1767,16)      0.0174
+(1773,16)      0.0147
+(1820,16)      0.0197
+(1821,16)      0.0339
+(1822,16)      0.0369
+(1823,16)      0.0426
+(1824,16)      0.0608
+(1825,16)      0.0640
+(1826,16)      0.0608
+(1827,16)      0.0486
+(1828,16)      0.0174
+(1832,16)      0.0150
+(1833,16)      0.0156
+(1834,16)      0.0147
+(1880,16)      0.0197
+(1881,16)      0.0369
+(1882,16)      0.0446
+(1883,16)      0.0631
+(1884,16)      0.0807
+(1885,16)      0.0859
+(1886,16)      0.0870
+(1887,16)      0.0870
+(1888,16)      0.0651
+(1889,16)      0.0240
+(1890,16)      0.0164
+(1891,16)      0.0164
+(1892,16)      0.0263
+(1893,16)      0.0263
+(1894,16)      0.0159
+(1939,16)      0.0161
+(1940,16)      0.0259
+(1941,16)      0.0446
+(1942,16)      0.0521
+(1943,16)      0.0807
+(1944,16)      0.0859
+(1945,16)      0.0993
+(1946,16)      0.1125
+(1947,16)      0.1210
+(1948,16)      0.1076
+(1949,16)      0.0719
+(1950,16)      0.0426
+(1951,16)      0.0340
+(1952,16)      0.0286
+(1953,16)      0.0278
+(1954,16)      0.0216
+(1999,16)      0.0161
+(2000,16)      0.0259
+(2001,16)      0.0473
+(2002,16)      0.0521
+(2003,16)      0.0829
+(2004,16)      0.0957
+(2005,16)      0.1081
+(2006,16)      0.1232
+(2007,16)      0.1253
+(2008,16)      0.1210
+(2009,16)      0.1002
+(2010,16)      0.0701
+(2011,16)      0.0426
+(2012,16)      0.0333
+(2013,16)      0.0241
+(2059,16)      0.0168
+(2060,16)      0.0241
+(2061,16)      0.0379
+(2062,16)      0.0518
+(2063,16)      0.0829
+(2064,16)      0.0983
+(2065,16)      0.1167
+(2066,16)      0.1232
+(2067,16)      0.1294
+(2068,16)      0.1232
+(2069,16)      0.1002
+(2070,16)      0.0719
+(2071,16)      0.0444
+(2072,16)      0.0272
+(2073,16)      0.0207
+(2120,16)      0.0168
+(2121,16)      0.0283
+(2122,16)      0.0405
+(2123,16)      0.0829
+(2124,16)      0.1038
+(2125,16)      0.1167
+(2126,16)      0.1232
+(2127,16)      0.1361
+(2128,16)      0.1232
+(2129,16)      0.1065
+(2130,16)      0.0857
+(2131,16)      0.0444
+(2132,16)      0.0272
+(2181,16)      0.0224
+(2182,16)      0.0345
+(2183,16)      0.0725
+(2184,16)      0.1038
+(2185,16)      0.1130
+(2186,16)      0.1361
+(2187,16)      0.1429
+(2188,16)      0.1311
+(2189,16)      0.1137
+(2190,16)      0.0954
+(2191,16)      0.0444
+(2192,16)      0.0376
+(2193,16)      0.0230
+(2242,16)      0.0238
+(2243,16)      0.0671
+(2244,16)      0.0940
+(2245,16)      0.1130
+(2246,16)      0.1361
+(2247,16)      0.1429
+(2248,16)      0.1339
+(2249,16)      0.1290
+(2250,16)      0.1033
+(2251,16)      0.0464
+(2252,16)      0.0403
+(2253,16)      0.0250
+(2254,16)      0.0151
+(2302,16)      0.0161
+(2303,16)      0.0449
+(2304,16)      0.0771
+(2305,16)      0.1131
+(2306,16)      0.1332
+(2307,16)      0.1402
+(2308,16)      0.1311
+(2309,16)      0.1247
+(2310,16)      0.0975
+(2311,16)      0.0497
+(2312,16)      0.0403
+(2313,16)      0.0250
+(2314,16)      0.0144
+(2363,16)      0.0266
+(2364,16)      0.0631
+(2365,16)      0.1131
+(2366,16)      0.1254
+(2367,16)      0.1282
+(2368,16)      0.1247
+(2369,16)      0.1129
+(2370,16)      0.0878
+(2371,16)      0.0464
+(2372,16)      0.0348
+(2373,16)      0.0151
+(2424,16)      0.0276
+(2425,16)      0.0743
+(2426,16)      0.1055
+(2427,16)      0.1129
+(2428,16)      0.1062
+(2429,16)      0.0878
+(2430,16)      0.0704
+(2431,16)      0.0389
+(2432,16)      0.0272
+(2433,16)      0.0144
+(2485,16)      0.0276
+(2486,16)      0.0700
+(2487,16)      0.0764
+(2488,16)      0.0867
+(2489,16)      0.0704
+(2490,16)      0.0549
+(2491,16)      0.0325
+(2492,16)      0.0250
+(2493,16)      0.0192
+(2546,16)      0.0251
+(2547,16)      0.0394
+(2548,16)      0.0535
+(2549,16)      0.0535
+(2550,16)      0.0410
+(2551,16)      0.0272
+(2552,16)      0.0213
+(2553,16)      0.0192
+(2554,16)      0.0174
+(2607,16)      0.0229
+(2608,16)      0.0338
+(2609,16)      0.0394
+(2610,16)      0.0338
+(2611,16)      0.0250
+(2612,16)      0.0205
+(2613,16)      0.0196
+(2614,16)      0.0181
+(2668,16)      0.0229
+(2669,16)      0.0333
+(2670,16)      0.0307
+(2671,16)      0.0260
+(2672,16)      0.0205
+(2673,16)      0.0196
+(2674,16)      0.0181
+(2728,16)      0.0145
+(2729,16)      0.0257
+(2730,16)      0.0277
+(2731,16)      0.0257
+(2732,16)      0.0208
+(2733,16)      0.0208
+(2734,16)      0.0171
+(2735,16)      0.0160
+(2789,16)      0.0184
+(2790,16)      0.0260
+(2791,16)      0.0257
+(2792,16)      0.0208
+(2793,16)      0.0208
+(2794,16)      0.0171
+(2795,16)      0.0171
+(2850,16)      0.0226
+(2851,16)      0.0226
+(2852,16)      0.0165
+(2853,16)      0.0165
+(2854,16)      0.0171
+(2855,16)      0.0171
+(2910,16)      0.0218
+(2911,16)      0.0218
+(2912,16)      0.0165
+(2913,16)      0.0155
+(2914,16)      0.0173
+(2915,16)      0.0173
+(2970,16)      0.0218
+(2971,16)      0.0226
+(2972,16)      0.0198
+(2973,16)      0.0165
+(2974,16)      0.0167
+(2975,16)      0.0167
+(3030,16)      0.0154
+(3031,16)      0.0218
+(3032,16)      0.0218
+(3033,16)      0.0193
+(3090,16)      0.0145
+(3091,16)      0.0198
+(3092,16)      0.0238
+(3093,16)      0.0238
+(3151,16)      0.0145
+(3152,16)      0.0225
+(3153,16)      0.0225
+(3212,16)      0.0246
+(3213,16)      0.0246
+(3273,16)      0.0171
+   (2,17)      0.0173
+   (3,17)      0.0173
+   (4,17)      0.0177
+   (5,17)      0.0255
+   (6,17)      0.0252
+   (7,17)      0.0249
+   (8,17)      0.0132
+   (9,17)      0.0132
+  (10,17)      0.0142
+  (11,17)      0.0156
+  (12,17)      0.0156
+  (13,17)      0.0450
+  (14,17)      0.0724
+  (15,17)      0.0724
+  (16,17)      0.0724
+  (17,17)      0.0739
+  (18,17)      0.0750
+  (19,17)      0.0750
+  (20,17)      0.0750
+  (21,17)      0.0757
+  (22,17)      0.0145
+  (61,17)      0.0173
+  (62,17)      0.0238
+  (63,17)      0.0255
+  (64,17)      0.0263
+  (65,17)      0.0334
+  (66,17)      0.0334
+  (67,17)      0.0359
+  (68,17)      0.0249
+  (69,17)      0.0238
+  (70,17)      0.0204
+  (71,17)      0.0238
+  (72,17)      0.0450
+  (73,17)      0.0926
+  (74,17)      0.0926
+  (75,17)      0.0739
+  (76,17)      0.0739
+  (77,17)      0.0788
+  (78,17)      0.0788
+  (79,17)      0.0767
+  (80,17)      0.0750
+  (81,17)      0.0757
+  (82,17)      0.0549
+  (83,17)      0.0129
+ (121,17)      0.0269
+ (122,17)      0.0283
+ (123,17)      0.0285
+ (124,17)      0.0329
+ (125,17)      0.0344
+ (126,17)      0.0359
+ (127,17)      0.0396
+ (128,17)      0.0308
+ (129,17)      0.0308
+ (130,17)      0.0240
+ (131,17)      0.0334
+ (132,17)      0.0641
+ (133,17)      0.0994
+ (134,17)      0.0994
+ (135,17)      0.0767
+ (136,17)      0.0767
+ (137,17)      0.0774
+ (138,17)      0.0767
+ (139,17)      0.0732
+ (140,17)      0.0672
+ (141,17)      0.0549
+ (142,17)      0.0163
+ (181,17)      0.0285
+ (182,17)      0.0386
+ (183,17)      0.0393
+ (184,17)      0.0386
+ (185,17)      0.0396
+ (186,17)      0.0396
+ (187,17)      0.0537
+ (188,17)      0.0448
+ (189,17)      0.0448
+ (190,17)      0.0334
+ (191,17)      0.0416
+ (192,17)      0.0641
+ (193,17)      0.1190
+ (194,17)      0.1190
+ (195,17)      0.0927
+ (196,17)      0.0774
+ (197,17)      0.0767
+ (198,17)      0.0732
+ (199,17)      0.0581
+ (200,17)      0.0163
+ (201,17)      0.0129
+ (241,17)      0.0393
+ (242,17)      0.0429
+ (243,17)      0.0440
+ (244,17)      0.0421
+ (245,17)      0.0446
+ (246,17)      0.0598
+ (247,17)      0.0671
+ (248,17)      0.0606
+ (249,17)      0.0550
+ (250,17)      0.0448
+ (251,17)      0.0416
+ (252,17)      0.0416
+ (253,17)      0.1262
+ (254,17)      0.1262
+ (255,17)      0.1173
+ (256,17)      0.0835
+ (257,17)      0.0732
+ (258,17)      0.0581
+ (259,17)      0.0151
+ (301,17)      0.0429
+ (302,17)      0.0484
+ (303,17)      0.0539
+ (304,17)      0.0605
+ (305,17)      0.0607
+ (306,17)      0.0853
+ (307,17)      0.0880
+ (308,17)      0.0689
+ (309,17)      0.0606
+ (310,17)      0.0545
+ (311,17)      0.0442
+ (312,17)      0.0442
+ (313,17)      0.0935
+ (314,17)      0.1132
+ (315,17)      0.1132
+ (316,17)      0.0835
+ (317,17)      0.0612
+ (318,17)      0.0156
+ (361,17)      0.0424
+ (362,17)      0.0484
+ (363,17)      0.0605
+ (364,17)      0.0829
+ (365,17)      0.0908
+ (366,17)      0.1081
+ (367,17)      0.1108
+ (368,17)      0.0905
+ (369,17)      0.0607
+ (370,17)      0.0594
+ (371,17)      0.0484
+ (372,17)      0.0442
+ (373,17)      0.0570
+ (374,17)      0.0985
+ (375,17)      0.0985
+ (376,17)      0.0814
+ (377,17)      0.0240
+ (421,17)      0.0314
+ (422,17)      0.0465
+ (423,17)      0.0829
+ (424,17)      0.0997
+ (425,17)      0.1108
+ (426,17)      0.1150
+ (427,17)      0.1152
+ (428,17)      0.1152
+ (429,17)      0.0699
+ (430,17)      0.0594
+ (431,17)      0.0484
+ (432,17)      0.0412
+ (433,17)      0.0299
+ (434,17)      0.0386
+ (435,17)      0.0386
+ (436,17)      0.0264
+ (481,17)      0.0253
+ (482,17)      0.0315
+ (483,17)      0.0909
+ (484,17)      0.1150
+ (485,17)      0.1150
+ (486,17)      0.1108
+ (487,17)      0.1028
+ (488,17)      0.0902
+ (489,17)      0.0775
+ (490,17)      0.0607
+ (491,17)      0.0412
+ (492,17)      0.0172
+ (493,17)      0.0174
+ (494,17)      0.0174
+ (495,17)      0.0251
+ (541,17)      0.0138
+ (542,17)      0.0290
+ (543,17)      0.0909
+ (544,17)      0.1004
+ (545,17)      0.1028
+ (546,17)      0.0999
+ (547,17)      0.0929
+ (548,17)      0.0778
+ (549,17)      0.0749
+ (550,17)      0.0734
+ (551,17)      0.0188
+ (553,17)      0.0165
+ (554,17)      0.0165
+ (602,17)      0.0177
+ (603,17)      0.0712
+ (604,17)      0.0914
+ (605,17)      0.0987
+ (606,17)      0.0902
+ (607,17)      0.0778
+ (608,17)      0.0735
+ (609,17)      0.0734
+ (610,17)      0.0675
+ (613,17)      0.0160
+ (614,17)      0.0160
+ (662,17)      0.0138
+ (663,17)      0.0524
+ (664,17)      0.0712
+ (665,17)      0.0894
+ (666,17)      0.0778
+ (667,17)      0.0710
+ (668,17)      0.0696
+ (669,17)      0.0665
+ (670,17)      0.0637
+ (673,17)      0.0160
+ (674,17)      0.0160
+ (722,17)      0.0143
+ (723,17)      0.0348
+ (724,17)      0.0635
+ (725,17)      0.0719
+ (726,17)      0.0719
+ (727,17)      0.0719
+ (728,17)      0.0696
+ (729,17)      0.0675
+ (730,17)      0.0637
+ (733,17)      0.0189
+ (734,17)      0.0189
+ (782,17)      0.0147
+ (783,17)      0.0182
+ (784,17)      0.0389
+ (785,17)      0.0635
+ (786,17)      0.0706
+ (787,17)      0.0732
+ (788,17)      0.0721
+ (789,17)      0.0710
+ (790,17)      0.0630
+ (793,17)      0.0208
+ (794,17)      0.0208
+ (842,17)      0.0161
+ (843,17)      0.0161
+ (844,17)      0.0207
+ (845,17)      0.0389
+ (846,17)      0.0635
+ (847,17)      0.0866
+ (848,17)      0.0866
+ (849,17)      0.0710
+ (850,17)      0.0544
+ (851,17)      0.0197
+ (853,17)      0.0211
+ (854,17)      0.0208
+ (902,17)      0.0147
+ (904,17)      0.0147
+ (905,17)      0.0182
+ (906,17)      0.0563
+ (907,17)      0.0624
+ (908,17)      0.0721
+ (909,17)      0.0544
+ (910,17)      0.0276
+ (911,17)      0.0211
+ (913,17)      0.0208
+ (966,17)      0.0150
+ (967,17)      0.0306
+ (968,17)      0.0501
+ (969,17)      0.0276
+ (970,17)      0.0131
+ (971,17)      0.0131
+(1818,18)      0.0222
+(1877,18)      0.0153
+(1878,18)      0.0293
+(1879,18)      0.0257
+(1937,18)      0.0184
+(1938,18)      0.0345
+(1939,18)      0.0345
+(1996,18)      0.0153
+(1997,18)      0.0206
+(1998,18)      0.0345
+(1999,18)      0.0345
+(2056,18)      0.0184
+(2057,18)      0.0259
+(2058,18)      0.0287
+(2059,18)      0.0318
+(2116,18)      0.0206
+(2117,18)      0.0254
+(2118,18)      0.0259
+(2119,18)      0.0318
+(2120,18)      0.0318
+(2176,18)      0.0162
+(2177,18)      0.0218
+(2178,18)      0.0254
+(2179,18)      0.0435
+(2180,18)      0.0435
+(2181,18)      0.0222
+(2236,18)      0.0162
+(2237,18)      0.0176
+(2238,18)      0.0254
+(2239,18)      0.0435
+(2240,18)      0.0522
+(2241,18)      0.0339
+(2242,18)      0.0170
+(2297,18)      0.0176
+(2298,18)      0.0305
+(2299,18)      0.0428
+(2300,18)      0.0605
+(2301,18)      0.0605
+(2302,18)      0.0330
+(2356,18)      0.0176
+(2357,18)      0.0295
+(2358,18)      0.0373
+(2359,18)      0.0436
+(2360,18)      0.0662
+(2361,18)      0.0711
+(2362,18)      0.0605
+(2363,18)      0.0330
+(2416,18)      0.0236
+(2417,18)      0.0422
+(2418,18)      0.0532
+(2419,18)      0.0572
+(2420,18)      0.0798
+(2421,18)      0.1099
+(2422,18)      0.1172
+(2423,18)      0.0638
+(2424,18)      0.0330
+(2425,18)      0.0259
+(2428,18)      0.0165
+(2429,18)      0.0158
+(2434,18)      0.0253
+(2435,18)      0.0176
+(2476,18)      0.0284
+(2477,18)      0.0526
+(2478,18)      0.0538
+(2479,18)      0.0700
+(2480,18)      0.1099
+(2481,18)      0.1425
+(2482,18)      0.1425
+(2483,18)      0.1172
+(2484,18)      0.0804
+(2485,18)      0.0585
+(2486,18)      0.0264
+(2487,18)      0.0246
+(2488,18)      0.0271
+(2489,18)      0.0271
+(2490,18)      0.0271
+(2493,18)      0.0265
+(2494,18)      0.0353
+(2495,18)      0.0318
+(2496,18)      0.0176
+(2536,18)      0.0153
+(2537,18)      0.0374
+(2538,18)      0.0572
+(2539,18)      0.0743
+(2540,18)      0.1183
+(2541,18)      0.1328
+(2542,18)      0.1423
+(2543,18)      0.1255
+(2544,18)      0.1092
+(2545,18)      0.1008
+(2546,18)      0.0720
+(2547,18)      0.0456
+(2548,18)      0.0456
+(2549,18)      0.0456
+(2550,18)      0.0350
+(2551,18)      0.0298
+(2552,18)      0.0342
+(2553,18)      0.0405
+(2554,18)      0.0364
+(2555,18)      0.0307
+(2556,18)      0.0282
+(2597,18)      0.0203
+(2598,18)      0.0374
+(2599,18)      0.0700
+(2600,18)      0.1074
+(2601,18)      0.1242
+(2602,18)      0.1215
+(2603,18)      0.1092
+(2604,18)      0.1069
+(2605,18)      0.1069
+(2606,18)      0.1019
+(2607,18)      0.0782
+(2608,18)      0.0654
+(2609,18)      0.0507
+(2610,18)      0.0417
+(2611,18)      0.0365
+(2612,18)      0.0370
+(2613,18)      0.0370
+(2614,18)      0.0349
+(2615,18)      0.0282
+(2616,18)      0.0180
+(2657,18)      0.0151
+(2658,18)      0.0239
+(2659,18)      0.0656
+(2660,18)      0.0862
+(2661,18)      0.1013
+(2662,18)      0.1013
+(2663,18)      0.1013
+(2664,18)      0.1019
+(2665,18)      0.1069
+(2666,18)      0.1029
+(2667,18)      0.0951
+(2668,18)      0.0730
+(2669,18)      0.0601
+(2670,18)      0.0365
+(2671,18)      0.0370
+(2672,18)      0.0407
+(2673,18)      0.0370
+(2674,18)      0.0282
+(2675,18)      0.0155
+(2718,18)      0.0239
+(2719,18)      0.0514
+(2720,18)      0.0793
+(2721,18)      0.0874
+(2722,18)      0.0874
+(2723,18)      0.0898
+(2724,18)      0.0898
+(2725,18)      0.0928
+(2726,18)      0.1014
+(2727,18)      0.0951
+(2728,18)      0.0609
+(2729,18)      0.0365
+(2730,18)      0.0298
+(2731,18)      0.0342
+(2732,18)      0.0370
+(2733,18)      0.0370
+(2734,18)      0.0182
+(2778,18)      0.0299
+(2779,18)      0.0497
+(2780,18)      0.0791
+(2781,18)      0.0799
+(2782,18)      0.0838
+(2783,18)      0.0838
+(2784,18)      0.0785
+(2785,18)      0.0785
+(2786,18)      0.0785
+(2787,18)      0.0688
+(2788,18)      0.0481
+(2789,18)      0.0323
+(2790,18)      0.0283
+(2791,18)      0.0323
+(2792,18)      0.0418
+(2793,18)      0.0418
+(2794,18)      0.0182
+(2838,18)      0.0394
+(2839,18)      0.0497
+(2840,18)      0.0775
+(2841,18)      0.0791
+(2842,18)      0.0793
+(2843,18)      0.0758
+(2844,18)      0.0682
+(2845,18)      0.0673
+(2846,18)      0.0642
+(2847,18)      0.0584
+(2848,18)      0.0476
+(2849,18)      0.0404
+(2850,18)      0.0323
+(2851,18)      0.0323
+(2852,18)      0.0288
+(2853,18)      0.0185
+(2898,18)      0.0440
+(2899,18)      0.0497
+(2900,18)      0.0775
+(2901,18)      0.0791
+(2902,18)      0.0788
+(2903,18)      0.0771
+(2904,18)      0.0745
+(2905,18)      0.0682
+(2906,18)      0.0593
+(2907,18)      0.0565
+(2908,18)      0.0448
+(2909,18)      0.0400
+(2910,18)      0.0346
+(2911,18)      0.0275
+(2912,18)      0.0190
+(2957,18)      0.0201
+(2958,18)      0.0346
+(2959,18)      0.0483
+(2960,18)      0.0745
+(2961,18)      0.0801
+(2962,18)      0.0843
+(2963,18)      0.0788
+(2964,18)      0.0772
+(2965,18)      0.0706
+(2966,18)      0.0584
+(2967,18)      0.0474
+(2968,18)      0.0371
+(2969,18)      0.0346
+(2970,18)      0.0330
+(2971,18)      0.0250
+(2972,18)      0.0185
+(3018,18)      0.0226
+(3019,18)      0.0440
+(3020,18)      0.0745
+(3021,18)      0.0843
+(3022,18)      0.0897
+(3023,18)      0.0878
+(3024,18)      0.0777
+(3025,18)      0.0735
+(3026,18)      0.0568
+(3027,18)      0.0371
+(3028,18)      0.0339
+(3029,18)      0.0293
+(3030,18)      0.0285
+(3031,18)      0.0250
+(3032,18)      0.0208
+(3079,18)      0.0268
+(3080,18)      0.0555
+(3081,18)      0.0824
+(3082,18)      0.0897
+(3083,18)      0.0888
+(3084,18)      0.0777
+(3085,18)      0.0614
+(3086,18)      0.0514
+(3087,18)      0.0361
+(3088,18)      0.0289
+(3089,18)      0.0210
+(3090,18)      0.0209
+(3091,18)      0.0210
+(3092,18)      0.0164
+(3140,18)      0.0396
+(3141,18)      0.0565
+(3142,18)      0.0814
+(3143,18)      0.0777
+(3144,18)      0.0614
+(3145,18)      0.0514
+(3146,18)      0.0414
+(3147,18)      0.0293
+(3148,18)      0.0219
+(3149,18)      0.0143
+(3200,18)      0.0212
+(3201,18)      0.0396
+(3202,18)      0.0510
+(3203,18)      0.0546
+(3204,18)      0.0513
+(3205,18)      0.0429
+(3206,18)      0.0307
+(3207,18)      0.0280
+(3208,18)      0.0161
+(3261,18)      0.0212
+(3262,18)      0.0291
+(3263,18)      0.0430
+(3264,18)      0.0430
+(3265,18)      0.0429
+(3266,18)      0.0307
+(3267,18)      0.0263
+(3322,18)      0.0146
+(3323,18)      0.0291
+(3324,18)      0.0383
+(3325,18)      0.0403
+(3326,18)      0.0383
+(3327,18)      0.0280
+(3328,18)      0.0150
+(3383,18)      0.0178
+(3384,18)      0.0346
+(3385,18)      0.0403
+(3386,18)      0.0403
+(3387,18)      0.0321
+(3388,18)      0.0152
+(3443,18)      0.0186
+(3444,18)      0.0344
+(3445,18)      0.0346
+(3446,18)      0.0403
+(3447,18)      0.0255
+(3448,18)      0.0164
+(3502,18)      0.0177
+(3503,18)      0.0250
+(3504,18)      0.0344
+(3505,18)      0.0344
+(3506,18)      0.0342
+(3507,18)      0.0236
+(3563,18)      0.0250
+(3564,18)      0.0269
+(3565,18)      0.0269
+(3566,18)      0.0206
+(3623,18)      0.0171
+(3624,18)      0.0206
+(3625,18)      0.0206
+(1921,19)      0.0682
+(1922,19)      0.0682
+(1981,19)      0.0888
+(1982,19)      0.0888
+(2041,19)      0.0888
+(2042,19)      0.0888
+(2043,19)      0.0580
+(2047,19)      0.0225
+(2101,19)      0.0888
+(2102,19)      0.0888
+(2103,19)      0.0654
+(2104,19)      0.0404
+(2105,19)      0.0404
+(2106,19)      0.0330
+(2107,19)      0.0336
+(2108,19)      0.0225
+(2161,19)      0.0854
+(2162,19)      0.0854
+(2163,19)      0.0801
+(2164,19)      0.0580
+(2165,19)      0.0550
+(2166,19)      0.0404
+(2167,19)      0.0415
+(2168,19)      0.0334
+(2221,19)      0.0801
+(2222,19)      0.0801
+(2223,19)      0.0801
+(2224,19)      0.0657
+(2225,19)      0.0649
+(2226,19)      0.0479
+(2227,19)      0.0536
+(2228,19)      0.0336
+(2281,19)      0.0801
+(2282,19)      0.0816
+(2283,19)      0.0816
+(2284,19)      0.0816
+(2285,19)      0.0765
+(2286,19)      0.0649
+(2287,19)      0.0578
+(2288,19)      0.0477
+(2341,19)      0.0883
+(2342,19)      0.0883
+(2343,19)      0.0816
+(2344,19)      0.0816
+(2345,19)      0.0827
+(2346,19)      0.0758
+(2347,19)      0.0649
+(2348,19)      0.0477
+(2401,19)      0.0963
+(2402,19)      0.0963
+(2403,19)      0.0828
+(2404,19)      0.0827
+(2405,19)      0.0828
+(2406,19)      0.0827
+(2407,19)      0.0695
+(2408,19)      0.0465
+(2461,19)      0.1110
+(2462,19)      0.1110
+(2463,19)      0.0851
+(2464,19)      0.0827
+(2465,19)      0.0867
+(2466,19)      0.0867
+(2467,19)      0.0774
+(2468,19)      0.0465
+(2521,19)      0.1770
+(2522,19)      0.1770
+(2523,19)      0.1063
+(2524,19)      0.0867
+(2525,19)      0.0898
+(2526,19)      0.0898
+(2527,19)      0.0774
+(2528,19)      0.0483
+(2529,19)      0.0217
+(2581,19)      0.2161
+(2582,19)      0.2161
+(2583,19)      0.1139
+(2584,19)      0.1029
+(2585,19)      0.1029
+(2586,19)      0.1044
+(2587,19)      0.0774
+(2588,19)      0.0633
+(2589,19)      0.0232
+(2641,19)      0.1090
+(2642,19)      0.1155
+(2643,19)      0.1139
+(2644,19)      0.1029
+(2645,19)      0.1254
+(2646,19)      0.1329
+(2647,19)      0.1044
+(2648,19)      0.0725
+(2649,19)      0.0497
+(2702,19)      0.0903
+(2703,19)      0.0892
+(2704,19)      0.0903
+(2705,19)      0.1254
+(2706,19)      0.1329
+(2707,19)      0.1133
+(2708,19)      0.0755
+(2709,19)      0.0697
+(2762,19)      0.0305
+(2763,19)      0.0654
+(2764,19)      0.0717
+(2765,19)      0.0868
+(2766,19)      0.1133
+(2767,19)      0.0915
+(2768,19)      0.0769
+(2769,19)      0.0747
+(2770,19)      0.0321
+(2823,19)      0.0567
+(2824,19)      0.0642
+(2825,19)      0.0665
+(2826,19)      0.0778
+(2827,19)      0.0771
+(2828,19)      0.0769
+(2829,19)      0.0680
+(2830,19)      0.0371
+(2831,19)      0.0323
+(2832,19)      0.0297
+(2833,19)      0.0224
+(2884,19)      0.0642
+(2885,19)      0.0665
+(2886,19)      0.0743
+(2887,19)      0.0743
+(2888,19)      0.0749
+(2889,19)      0.0603
+(2890,19)      0.0371
+(2891,19)      0.0351
+(2892,19)      0.0313
+(2893,19)      0.0286
+(2944,19)      0.0665
+(2945,19)      0.0761
+(2946,19)      0.0778
+(2947,19)      0.0743
+(2948,19)      0.0551
+(2949,19)      0.0420
+(2950,19)      0.0313
+(2951,19)      0.0313
+(2952,19)      0.0288
+(3003,19)      0.0279
+(3004,19)      0.0539
+(3005,19)      0.0761
+(3006,19)      0.0771
+(3007,19)      0.0719
+(3008,19)      0.0420
+(3009,19)      0.0251
+(3063,19)      0.0370
+(3064,19)      0.0495
+(3065,19)      0.0574
+(3066,19)      0.0630
+(3067,19)      0.0574
+(3068,19)      0.0303
+(3123,19)      0.0391
+(3124,19)      0.0410
+(3125,19)      0.0495
+(3126,19)      0.0532
+(3127,19)      0.0518
+(3128,19)      0.0362
+(3183,19)      0.0391
+(3184,19)      0.0391
+(3185,19)      0.0391
+(3186,19)      0.0462
+(3187,19)      0.0517
+(3188,19)      0.0362
+(3244,19)      0.0251
+(3245,19)      0.0290
+(3246,19)      0.0446
+(3247,19)      0.0485
+(3248,19)      0.0241
+(3305,19)      0.0226
+(3306,19)      0.0251
+  (44,20)      0.0186
+  (45,20)      0.0192
+  (49,20)      0.0267
+  (50,20)      0.0287
+  (51,20)      0.0287
+  (52,20)      0.0203
+  (53,20)      0.0285
+  (54,20)      0.0285
+  (55,20)      0.0320
+  (56,20)      0.0392
+  (57,20)      0.0273
+  (58,20)      0.0233
+  (59,20)      0.0196
+ (104,20)      0.0306
+ (105,20)      0.0280
+ (106,20)      0.0192
+ (107,20)      0.0202
+ (108,20)      0.0267
+ (109,20)      0.0438
+ (110,20)      0.0438
+ (111,20)      0.0292
+ (112,20)      0.0287
+ (113,20)      0.0299
+ (114,20)      0.0336
+ (115,20)      0.0392
+ (116,20)      0.0392
+ (117,20)      0.0295
+ (118,20)      0.0288
+ (119,20)      0.0233
+ (120,20)      0.0185
+ (164,20)      0.0209
+ (165,20)      0.0287
+ (166,20)      0.0202
+ (167,20)      0.0224
+ (168,20)      0.0290
+ (169,20)      0.0392
+ (170,20)      0.0376
+ (171,20)      0.0343
+ (172,20)      0.0333
+ (173,20)      0.0343
+ (174,20)      0.0392
+ (175,20)      0.0392
+ (176,20)      0.0295
+ (177,20)      0.0288
+ (178,20)      0.0245
+ (179,20)      0.0216
+ (224,20)      0.0209
+ (225,20)      0.0306
+ (226,20)      0.0287
+ (227,20)      0.0290
+ (228,20)      0.0357
+ (229,20)      0.0392
+ (230,20)      0.0430
+ (231,20)      0.0549
+ (232,20)      0.0412
+ (233,20)      0.0508
+ (234,20)      0.0474
+ (235,20)      0.0414
+ (236,20)      0.0295
+ (237,20)      0.0245
+ (238,20)      0.0242
+ (285,20)      0.0287
+ (286,20)      0.0311
+ (287,20)      0.0392
+ (288,20)      0.0392
+ (289,20)      0.0515
+ (290,20)      0.0640
+ (291,20)      0.0640
+ (292,20)      0.0640
+ (293,20)      0.0592
+ (294,20)      0.0508
+ (295,20)      0.0414
+ (296,20)      0.0301
+ (297,20)      0.0230
+ (298,20)      0.0216
+ (346,20)      0.0359
+ (347,20)      0.0575
+ (348,20)      0.0591
+ (349,20)      0.0683
+ (350,20)      0.0811
+ (351,20)      0.0811
+ (352,20)      0.0713
+ (353,20)      0.0640
+ (354,20)      0.0507
+ (355,20)      0.0395
+ (356,20)      0.0301
+ (357,20)      0.0261
+ (358,20)      0.0213
+ (406,20)      0.0497
+ (407,20)      0.0591
+ (408,20)      0.0976
+ (409,20)      0.1031
+ (410,20)      0.1031
+ (411,20)      0.0915
+ (412,20)      0.0806
+ (413,20)      0.0584
+ (414,20)      0.0416
+ (415,20)      0.0363
+ (416,20)      0.0298
+ (417,20)      0.0253
+ (418,20)      0.0226
+ (419,20)      0.0221
+ (466,20)      0.0497
+ (467,20)      0.0976
+ (468,20)      0.1272
+ (469,20)      0.1790
+ (470,20)      0.1455
+ (471,20)      0.1088
+ (472,20)      0.0777
+ (473,20)      0.0491
+ (474,20)      0.0407
+ (475,20)      0.0317
+ (476,20)      0.0253
+ (477,20)      0.0232
+ (478,20)      0.0226
+ (479,20)      0.0265
+ (480,20)      0.0226
+ (525,20)      0.0412
+ (526,20)      0.0803
+ (527,20)      0.1272
+ (528,20)      0.1546
+ (529,20)      0.1790
+ (530,20)      0.1455
+ (531,20)      0.1097
+ (532,20)      0.0770
+ (533,20)      0.0491
+ (534,20)      0.0403
+ (535,20)      0.0276
+ (536,20)      0.0224
+ (537,20)      0.0224
+ (538,20)      0.0226
+ (539,20)      0.0275
+ (540,20)      0.0265
+ (585,20)      0.0722
+ (586,20)      0.0900
+ (587,20)      0.1341
+ (588,20)      0.1518
+ (589,20)      0.1518
+ (590,20)      0.1231
+ (591,20)      0.1097
+ (592,20)      0.0777
+ (593,20)      0.0593
+ (594,20)      0.0382
+ (595,20)      0.0232
+ (596,20)      0.0208
+ (597,20)      0.0204
+ (598,20)      0.0188
+ (599,20)      0.0265
+ (600,20)      0.0231
+ (645,20)      0.0810
+ (646,20)      0.0978
+ (647,20)      0.1162
+ (648,20)      0.1401
+ (649,20)      0.1231
+ (650,20)      0.1166
+ (651,20)      0.1097
+ (652,20)      0.0890
+ (653,20)      0.0595
+ (654,20)      0.0364
+ (655,20)      0.0208
+ (656,20)      0.0188
+ (704,20)      0.0208
+ (705,20)      0.0838
+ (706,20)      0.0978
+ (707,20)      0.1140
+ (708,20)      0.1162
+ (709,20)      0.1140
+ (710,20)      0.1120
+ (711,20)      0.1058
+ (712,20)      0.0918
+ (713,20)      0.0593
+ (714,20)      0.0226
+ (715,20)      0.0201
+ (764,20)      0.0208
+ (765,20)      0.0795
+ (766,20)      0.0916
+ (767,20)      0.1046
+ (768,20)      0.1062
+ (769,20)      0.1062
+ (770,20)      0.1094
+ (771,20)      0.1050
+ (772,20)      0.0918
+ (773,20)      0.0532
+ (774,20)      0.0226
+ (824,20)      0.0183
+ (825,20)      0.0487
+ (826,20)      0.0875
+ (827,20)      0.0920
+ (828,20)      0.0981
+ (829,20)      0.1046
+ (830,20)      0.0981
+ (831,20)      0.0923
+ (832,20)      0.0829
+ (833,20)      0.0431
+ (834,20)      0.0252
+ (835,20)      0.0182
+ (886,20)      0.0615
+ (887,20)      0.0874
+ (888,20)      0.0910
+ (889,20)      0.0923
+ (890,20)      0.0910
+ (891,20)      0.0842
+ (892,20)      0.0715
+ (893,20)      0.0401
+ (947,20)      0.0563
+ (948,20)      0.0788
+ (949,20)      0.0844
+ (950,20)      0.0801
+ (951,20)      0.0752
+ (952,20)      0.0584
+ (953,20)      0.0252
+(1007,20)      0.0474
+(1008,20)      0.0505
+(1009,20)      0.0563
+(1010,20)      0.0650
+(1011,20)      0.0584
+(1012,20)      0.0361
+(1067,20)      0.0261
+(1068,20)      0.0327
+(1069,20)      0.0329
+(1070,20)      0.0393
+(1071,20)      0.0361
+(1130,20)      0.0236
+(1131,20)      0.0180
+ (143,21)      0.0225
+ (144,21)      0.0225
+ (202,21)      0.0364
+ (203,21)      0.0362
+ (204,21)      0.0289
+ (205,21)      0.0272
+ (260,21)      0.0206
+ (261,21)      0.0260
+ (262,21)      0.0393
+ (263,21)      0.0418
+ (264,21)      0.0390
+ (265,21)      0.0390
+ (266,21)      0.0272
+ (311,21)      0.0210
+ (312,21)      0.0210
+ (318,21)      0.0224
+ (319,21)      0.0260
+ (320,21)      0.0224
+ (321,21)      0.0206
+ (322,21)      0.0364
+ (323,21)      0.0418
+ (324,21)      0.0418
+ (325,21)      0.0418
+ (326,21)      0.0380
+ (371,21)      0.0196
+ (372,21)      0.0210
+ (373,21)      0.0210
+ (377,21)      0.0359
+ (378,21)      0.0379
+ (379,21)      0.0379
+ (380,21)      0.0260
+ (381,21)      0.0206
+ (382,21)      0.0206
+ (383,21)      0.0430
+ (384,21)      0.0430
+ (385,21)      0.0399
+ (386,21)      0.0354
+ (431,21)      0.0196
+ (432,21)      0.0292
+ (433,21)      0.0292
+ (434,21)      0.0268
+ (435,21)      0.0268
+ (436,21)      0.0359
+ (437,21)      0.0443
+ (438,21)      0.0462
+ (439,21)      0.0654
+ (440,21)      0.0478
+ (441,21)      0.0402
+ (442,21)      0.0402
+ (443,21)      0.0503
+ (444,21)      0.0503
+ (445,21)      0.0399
+ (446,21)      0.0310
+ (491,21)      0.0401
+ (492,21)      0.0466
+ (493,21)      0.0479
+ (494,21)      0.0332
+ (495,21)      0.0516
+ (496,21)      0.0540
+ (497,21)      0.0558
+ (498,21)      0.0777
+ (499,21)      0.0970
+ (500,21)      0.0970
+ (501,21)      0.0745
+ (502,21)      0.0523
+ (503,21)      0.0557
+ (504,21)      0.0557
+ (505,21)      0.0463
+ (506,21)      0.0310
+ (551,21)      0.0519
+ (552,21)      0.0519
+ (553,21)      0.0516
+ (554,21)      0.0479
+ (555,21)      0.0567
+ (556,21)      0.0581
+ (557,21)      0.0654
+ (558,21)      0.0796
+ (559,21)      0.1727
+ (560,21)      0.1727
+ (561,21)      0.0929
+ (562,21)      0.0604
+ (563,21)      0.0588
+ (564,21)      0.0588
+ (565,21)      0.0558
+ (566,21)      0.0374
+ (611,21)      0.0604
+ (612,21)      0.0604
+ (613,21)      0.0479
+ (614,21)      0.0479
+ (615,21)      0.0574
+ (616,21)      0.0617
+ (617,21)      0.0713
+ (618,21)      0.0796
+ (619,21)      0.1094
+ (620,21)      0.1094
+ (621,21)      0.0979
+ (622,21)      0.0830
+ (623,21)      0.0634
+ (624,21)      0.0617
+ (625,21)      0.0602
+ (626,21)      0.0453
+ (627,21)      0.0326
+ (671,21)      0.0567
+ (672,21)      0.0567
+ (673,21)      0.0437
+ (674,21)      0.0437
+ (675,21)      0.0495
+ (676,21)      0.0574
+ (677,21)      0.0693
+ (678,21)      0.0792
+ (679,21)      0.1008
+ (680,21)      0.1008
+ (681,21)      0.1054
+ (682,21)      0.0905
+ (683,21)      0.0830
+ (684,21)      0.0634
+ (685,21)      0.0627
+ (686,21)      0.0602
+ (687,21)      0.0453
+ (688,21)      0.0259
+ (731,21)      0.0425
+ (732,21)      0.0425
+ (733,21)      0.0303
+ (734,21)      0.0303
+ (735,21)      0.0387
+ (736,21)      0.0507
+ (737,21)      0.0686
+ (738,21)      0.0713
+ (739,21)      0.1008
+ (740,21)      0.1094
+ (741,21)      0.1080
+ (742,21)      0.0986
+ (743,21)      0.0905
+ (744,21)      0.0713
+ (745,21)      0.0650
+ (746,21)      0.0632
+ (747,21)      0.0617
+ (748,21)      0.0453
+ (749,21)      0.0259
+ (750,21)      0.0213
+ (791,21)      0.0303
+ (792,21)      0.0303
+ (793,21)      0.0250
+ (794,21)      0.0262
+ (795,21)      0.0385
+ (796,21)      0.0465
+ (797,21)      0.0625
+ (798,21)      0.0695
+ (799,21)      0.1316
+ (800,21)      0.1316
+ (801,21)      0.1101
+ (802,21)      0.1054
+ (803,21)      0.0950
+ (804,21)      0.0796
+ (805,21)      0.0713
+ (806,21)      0.0703
+ (807,21)      0.0632
+ (808,21)      0.0503
+ (809,21)      0.0330
+ (810,21)      0.0174
+ (851,21)      0.0231
+ (852,21)      0.0246
+ (853,21)      0.0219
+ (854,21)      0.0262
+ (855,21)      0.0393
+ (856,21)      0.0465
+ (857,21)      0.0558
+ (858,21)      0.0625
+ (859,21)      0.1192
+ (860,21)      0.1281
+ (861,21)      0.1192
+ (862,21)      0.1073
+ (863,21)      0.0950
+ (864,21)      0.0878
+ (865,21)      0.0753
+ (866,21)      0.0703
+ (867,21)      0.0503
+ (868,21)      0.0367
+ (869,21)      0.0300
+ (870,21)      0.0174
+ (914,21)      0.0247
+ (915,21)      0.0406
+ (916,21)      0.0485
+ (917,21)      0.0538
+ (918,21)      0.0625
+ (919,21)      0.1023
+ (920,21)      0.1192
+ (921,21)      0.1128
+ (922,21)      0.1051
+ (923,21)      0.0878
+ (924,21)      0.0818
+ (925,21)      0.0703
+ (926,21)      0.0487
+ (927,21)      0.0384
+ (928,21)      0.0300
+ (929,21)      0.0228
+ (974,21)      0.0230
+ (975,21)      0.0406
+ (976,21)      0.0466
+ (977,21)      0.0485
+ (978,21)      0.0590
+ (979,21)      0.0767
+ (980,21)      0.1033
+ (981,21)      0.1033
+ (982,21)      0.0895
+ (983,21)      0.0713
+ (984,21)      0.0673
+ (985,21)      0.0630
+ (986,21)      0.0384
+ (987,21)      0.0270
+ (988,21)      0.0257
+(1034,21)      0.0177
+(1035,21)      0.0230
+(1036,21)      0.0458
+(1037,21)      0.0466
+(1038,21)      0.0489
+(1039,21)      0.0632
+(1040,21)      0.0865
+(1041,21)      0.0865
+(1042,21)      0.0722
+(1043,21)      0.0667
+(1044,21)      0.0649
+(1045,21)      0.0588
+(1046,21)      0.0363
+(1047,21)      0.0230
+(1094,21)      0.0177
+(1095,21)      0.0212
+(1096,21)      0.0363
+(1097,21)      0.0446
+(1098,21)      0.0458
+(1099,21)      0.0489
+(1100,21)      0.0688
+(1101,21)      0.0722
+(1102,21)      0.0668
+(1103,21)      0.0630
+(1104,21)      0.0621
+(1105,21)      0.0570
+(1106,21)      0.0300
+(1156,21)      0.0261
+(1157,21)      0.0274
+(1158,21)      0.0330
+(1159,21)      0.0356
+(1160,21)      0.0439
+(1161,21)      0.0647
+(1162,21)      0.0647
+(1163,21)      0.0621
+(1164,21)      0.0558
+(1165,21)      0.0442
+(1166,21)      0.0210
+(1217,21)      0.0208
+(1218,21)      0.0274
+(1219,21)      0.0290
+(1220,21)      0.0356
+(1221,21)      0.0541
+(1222,21)      0.0558
+(1223,21)      0.0558
+(1224,21)      0.0476
+(1225,21)      0.0374
+(1278,21)      0.0208
+(1279,21)      0.0212
+(1280,21)      0.0290
+(1281,21)      0.0367
+(1282,21)      0.0541
+(1283,21)      0.0521
+(1284,21)      0.0444
+(1338,21)      0.0183
+(1339,21)      0.0205
+(1340,21)      0.0248
+(1341,21)      0.0283
+(1342,21)      0.0468
+(1343,21)      0.0476
+(1344,21)      0.0354
+(1399,21)      0.0187
+(1400,21)      0.0248
+(1401,21)      0.0251
+(1402,21)      0.0278
+(1403,21)      0.0354
+(1459,21)      0.0205
+(1460,21)      0.0251
+(1461,21)      0.0251
+(1462,21)      0.0251
+(1519,21)      0.0226
+(1520,21)      0.0251
+(1521,21)      0.0250
+(1579,21)      0.0200
+(1580,21)      0.0226
+(3383,22)      0.0215
+(3384,22)      0.0151
+(3385,22)      0.0098
+(3386,22)      0.0098
+(3387,22)      0.0098
+(3442,22)      0.0178
+(3443,22)      0.0215
+(3444,22)      0.0160
+(3445,22)      0.0133
+(3446,22)      0.0138
+(3447,22)      0.0138
+(3448,22)      0.0100
+(3502,22)      0.0178
+(3503,22)      0.0178
+(3504,22)      0.0133
+(3505,22)      0.0128
+(3506,22)      0.0274
+(3507,22)      0.0274
+(3550,22)      0.0167
+(3551,22)      0.0167
+(3562,22)      0.0222
+(3563,22)      0.0178
+(3564,22)      0.0131
+(3565,22)      0.0131
+(3566,22)      0.0435
+(3567,22)      0.0435
+(3611,22)      0.0172
+(3612,22)      0.0167
+(3613,22)      0.0124
+(3621,22)      0.0222
+(3622,22)      0.0299
+(3623,22)      0.0275
+(3624,22)      0.0222
+(3625,22)      0.0222
+(3626,22)      0.0474
+(3627,22)      0.0474
+(3671,22)      0.0205
+(3672,22)      0.0224
+(3673,22)      0.0224
+(3674,22)      0.0372
+(3675,22)      0.0372
+(3676,22)      0.0325
+(3680,22)      0.0172
+(3681,22)      0.0341
+(3682,22)      0.0366
+(3683,22)      0.0400
+(3684,22)      0.0236
+(3685,22)      0.0236
+(3686,22)      0.0474
+(3687,22)      0.0474
+(3731,22)      0.0220
+(3732,22)      0.0286
+(3733,22)      0.0372
+(3734,22)      0.0498
+(3735,22)      0.0515
+(3736,22)      0.0694
+(3737,22)      0.0325
+(3740,22)      0.0172
+(3741,22)      0.0366
+(3742,22)      0.0467
+(3743,22)      0.0467
+(3744,22)      0.0400
+(3745,22)      0.0328
+(3746,22)      0.0412
+(3747,22)      0.0412
+(3791,22)      0.0191
+(3792,22)      0.0349
+(3793,22)      0.0498
+(3794,22)      0.0608
+(3795,22)      0.0715
+(3796,22)      0.0813
+(3797,22)      0.0813
+(3800,22)      0.0134
+(3801,22)      0.0407
+(3802,22)      0.0572
+(3803,22)      0.0509
+(3804,22)      0.0434
+(3805,22)      0.0390
+(3806,22)      0.0328
+(3807,22)      0.0328
+(3851,22)      0.0191
+(3852,22)      0.0407
+(3853,22)      0.0515
+(3854,22)      0.0608
+(3855,22)      0.0725
+(3856,22)      0.0813
+(3857,22)      0.0813
+(3861,22)      0.0434
+(3862,22)      0.0580
+(3863,22)      0.0580
+(3864,22)      0.0468
+(3865,22)      0.0379
+(3866,22)      0.0317
+(3867,22)      0.0241
+(3911,22)      0.0302
+(3912,22)      0.0438
+(3913,22)      0.0487
+(3914,22)      0.0574
+(3915,22)      0.0725
+(3916,22)      0.0734
+(3917,22)      0.0640
+(3921,22)      0.0565
+(3922,22)      0.0875
+(3923,22)      0.0875
+(3924,22)      0.0468
+(3925,22)      0.0332
+(3926,22)      0.0279
+(3927,22)      0.0229
+(3970,22)      0.0194
+(3971,22)      0.0432
+(3972,22)      0.0449
+(3973,22)      0.0554
+(3974,22)      0.0632
+(3975,22)      0.0712
+(3976,22)      0.0683
+(3977,22)      0.0551
+(3978,22)      0.0133
+(3979,22)      0.0104
+(3980,22)      0.0147
+(3981,22)      0.0427
+(3982,22)      0.0753
+(3983,22)      0.0753
+(3984,22)      0.0332
+(3985,22)      0.0314
+(3986,22)      0.0278
+(3987,22)      0.0182
+(4029,22)      0.0194
+(4030,22)      0.0363
+(4031,22)      0.0432
+(4032,22)      0.0529
+(4033,22)      0.0582
+(4034,22)      0.0766
+(4035,22)      0.0712
+(4036,22)      0.0623
+(4037,22)      0.0493
+(4038,22)      0.0211
+(4039,22)      0.0168
+(4040,22)      0.0175
+(4041,22)      0.0398
+(4042,22)      0.0680
+(4043,22)      0.0680
+(4044,22)      0.0332
+(4045,22)      0.0279
+(4046,22)      0.0239
+(4047,22)      0.0195
+(4083,22)      0.0147
+(4084,22)      0.0147
+(4085,22)      0.0184
+(4086,22)      0.0171
+(4087,22)      0.0255
+(4088,22)      0.0255
+(4089,22)      0.0363
+(4090,22)      0.0413
+(4091,22)      0.0413
+(4092,22)      0.0529
+(4093,22)      0.0712
+(4094,22)      0.0843
+(4095,22)      0.0766
+(4096,22)      0.0589
+(4097,22)      0.0426
+(4098,22)      0.0229
+(4099,22)      0.0211
+(4100,22)      0.0243
+(4101,22)      0.0398
+(4102,22)      0.0596
+(4103,22)      0.0596
+(4104,22)      0.0424
+(4105,22)      0.0278
+(4106,22)      0.0233
+(4107,22)      0.0195
+(4108,22)      0.0197
+(4143,22)      0.0184
+(4144,22)      0.0181
+(4145,22)      0.0223
+(4146,22)      0.0255
+(4147,22)      0.0304
+(4148,22)      0.0419
+(4149,22)      0.0435
+(4150,22)      0.0435
+(4151,22)      0.0413
+(4152,22)      0.0512
+(4153,22)      0.0766
+(4154,22)      0.0908
+(4155,22)      0.0908
+(4156,22)      0.0589
+(4157,22)      0.0426
+(4158,22)      0.0243
+(4159,22)      0.0232
+(4160,22)      0.0385
+(4161,22)      0.0503
+(4162,22)      0.0592
+(4163,22)      0.0562
+(4164,22)      0.0424
+(4165,22)      0.0294
+(4166,22)      0.0230
+(4167,22)      0.0197
+(4168,22)      0.0205
+(4169,22)      0.0132
+(4202,22)      0.0249
+(4203,22)      0.0249
+(4204,22)      0.0204
+(4205,22)      0.0205
+(4206,22)      0.0273
+(4207,22)      0.0397
+(4208,22)      0.0508
+(4209,22)      0.0523
+(4210,22)      0.0511
+(4211,22)      0.0511
+(4212,22)      0.0570
+(4213,22)      0.0756
+(4214,22)      0.0912
+(4215,22)      0.0912
+(4216,22)      0.0741
+(4217,22)      0.0555
+(4218,22)      0.0320
+(4219,22)      0.0320
+(4220,22)      0.0447
+(4221,22)      0.0562
+(4222,22)      0.0592
+(4223,22)      0.0555
+(4224,22)      0.0400
+(4225,22)      0.0236
+(4226,22)      0.0215
+(4227,22)      0.0197
+(4228,22)      0.0197
+(4229,22)      0.0132
+(4262,22)      0.0294
+(4263,22)      0.0249
+(4264,22)      0.0205
+(4265,22)      0.0205
+(4266,22)      0.0304
+(4267,22)      0.0474
+(4268,22)      0.0550
+(4269,22)      0.0550
+(4270,22)      0.0550
+(4271,22)      0.0570
+(4272,22)      0.0630
+(4273,22)      0.0754
+(4274,22)      0.0912
+(4275,22)      0.0912
+(4276,22)      0.0879
+(4277,22)      0.0741
+(4278,22)      0.0471
+(4279,22)      0.0471
+(4280,22)      0.0787
+(4281,22)      0.0787
+(4282,22)      0.0673
+(4283,22)      0.0550
+(4284,22)      0.0378
+(4285,22)      0.0236
+(4286,22)      0.0215
+(4287,22)      0.0167
+(4288,22)      0.0167
+(4289,22)      0.0113
+(4321,22)      0.0096
+(4322,22)      0.0268
+(4323,22)      0.0222
+(4324,22)      0.0204
+(4325,22)      0.0205
+(4326,22)      0.0434
+(4327,22)      0.0523
+(4328,22)      0.0563
+(4329,22)      0.0563
+(4330,22)      0.0630
+(4331,22)      0.0634
+(4332,22)      0.0677
+(4333,22)      0.0870
+(4334,22)      0.0912
+(4335,22)      0.0912
+(4336,22)      0.0846
+(4337,22)      0.0741
+(4338,22)      0.0607
+(4339,22)      0.0607
+(4340,22)      0.0808
+(4341,22)      0.0808
+(4342,22)      0.0673
+(4343,22)      0.0512
+(4344,22)      0.0346
+(4345,22)      0.0236
+(4346,22)      0.0197
+(4347,22)      0.0167
+(4348,22)      0.0107
+(4349,22)      0.0099
+(4381,22)      0.0096
+(4382,22)      0.0222
+(4383,22)      0.0196
+(4384,22)      0.0177
+(4385,22)      0.0196
+(4386,22)      0.0444
+(4387,22)      0.0538
+(4388,22)      0.0619
+(4389,22)      0.0635
+(4390,22)      0.0635
+(4391,22)      0.0709
+(4392,22)      0.0754
+(4393,22)      0.0870
+(4394,22)      0.0823
+(4395,22)      0.0823
+(4396,22)      0.0639
+(4397,22)      0.0638
+(4398,22)      0.0547
+(4399,22)      0.0607
+(4400,22)      0.0723
+(4401,22)      0.0733
+(4402,22)      0.0604
+(4403,22)      0.0488
+(4404,22)      0.0309
+(4405,22)      0.0218
+(4406,22)      0.0189
+(4407,22)      0.0128
+(4408,22)      0.0097
+(4442,22)      0.0125
+(4443,22)      0.0177
+(4444,22)      0.0177
+(4445,22)      0.0307
+(4446,22)      0.0444
+(4447,22)      0.0538
+(4448,22)      0.0566
+(4449,22)      0.0585
+(4450,22)      0.0635
+(4451,22)      0.0719
+(4452,22)      0.0769
+(4453,22)      0.0797
+(4454,22)      0.0797
+(4455,22)      0.0638
+(4456,22)      0.0587
+(4457,22)      0.0511
+(4458,22)      0.0472
+(4459,22)      0.0547
+(4460,22)      0.0604
+(4461,22)      0.0604
+(4462,22)      0.0537
+(4463,22)      0.0458
+(4464,22)      0.0300
+(4465,22)      0.0199
+(4466,22)      0.0146
+(4467,22)      0.0099
+(4503,22)      0.0125
+(4504,22)      0.0246
+(4505,22)      0.0340
+(4506,22)      0.0434
+(4507,22)      0.0521
+(4508,22)      0.0521
+(4509,22)      0.0538
+(4510,22)      0.0635
+(4511,22)      0.0671
+(4512,22)      0.0719
+(4513,22)      0.0719
+(4514,22)      0.0651
+(4515,22)      0.0587
+(4516,22)      0.0511
+(4517,22)      0.0450
+(4518,22)      0.0450
+(4519,22)      0.0453
+(4520,22)      0.0512
+(4521,22)      0.0551
+(4522,22)      0.0512
+(4523,22)      0.0458
+(4524,22)      0.0277
+(4525,22)      0.0199
+(4526,22)      0.0146
+(4564,22)      0.0256
+(4565,22)      0.0307
+(4566,22)      0.0362
+(4567,22)      0.0383
+(4568,22)      0.0383
+(4569,22)      0.0484
+(4570,22)      0.0566
+(4571,22)      0.0717
+(4572,22)      0.0703
+(4573,22)      0.0661
+(4574,22)      0.0593
+(4575,22)      0.0529
+(4576,22)      0.0504
+(4577,22)      0.0444
+(4578,22)      0.0444
+(4579,22)      0.0401
+(4580,22)      0.0492
+(4581,22)      0.0512
+(4582,22)      0.0498
+(4583,22)      0.0428
+(4584,22)      0.0253
+(4585,22)      0.0199
+(4586,22)      0.0135
+(4625,22)      0.0158
+(4626,22)      0.0256
+(4627,22)      0.0271
+(4628,22)      0.0287
+(4629,22)      0.0347
+(4630,22)      0.0717
+(4631,22)      0.0717
+(4632,22)      0.0671
+(4633,22)      0.0600
+(4634,22)      0.0543
+(4635,22)      0.0529
+(4636,22)      0.0524
+(4637,22)      0.0445
+(4638,22)      0.0453
+(4639,22)      0.0433
+(4640,22)      0.0453
+(4641,22)      0.0488
+(4642,22)      0.0492
+(4643,22)      0.0428
+(4644,22)      0.0241
+(4645,22)      0.0190
+(4686,22)      0.0158
+(4687,22)      0.0188
+(4688,22)      0.0246
+(4689,22)      0.0302
+(4690,22)      0.0717
+(4691,22)      0.0717
+(4692,22)      0.0613
+(4693,22)      0.0547
+(4694,22)      0.0529
+(4695,22)      0.0524
+(4696,22)      0.0515
+(4697,22)      0.0503
+(4698,22)      0.0482
+(4699,22)      0.0453
+(4700,22)      0.0433
+(4701,22)      0.0453
+(4702,22)      0.0432
+(4703,22)      0.0428
+(4704,22)      0.0228
+(4705,22)      0.0139
+(4747,22)      0.0158
+(4748,22)      0.0188
+(4749,22)      0.0227
+(4750,22)      0.0352
+(4751,22)      0.0613
+(4752,22)      0.0547
+(4753,22)      0.0494
+(4754,22)      0.0494
+(4755,22)      0.0481
+(4756,22)      0.0503
+(4757,22)      0.0482
+(4758,22)      0.0455
+(4759,22)      0.0433
+(4760,22)      0.0393
+(4761,22)      0.0393
+(4762,22)      0.0393
+(4763,22)      0.0275
+(4764,22)      0.0139
+(1114,23)      0.0085
+(1115,23)      0.0112
+(1116,23)      0.0142
+(1117,23)      0.0112
+(1118,23)      0.0108
+(1173,23)      0.0085
+(1174,23)      0.0142
+(1175,23)      0.0179
+(1176,23)      0.0237
+(1177,23)      0.0189
+(1178,23)      0.0181
+(1179,23)      0.0148
+(1187,23)      0.0076
+(1188,23)      0.0076
+(1233,23)      0.0141
+(1234,23)      0.0218
+(1235,23)      0.0237
+(1236,23)      0.0294
+(1237,23)      0.0264
+(1238,23)      0.0290
+(1239,23)      0.0189
+(1240,23)      0.0181
+(1241,23)      0.0114
+(1247,23)      0.0115
+(1248,23)      0.0182
+(1249,23)      0.0068
+(1293,23)      0.0143
+(1294,23)      0.0222
+(1295,23)      0.0338
+(1296,23)      0.0364
+(1297,23)      0.0294
+(1298,23)      0.0332
+(1299,23)      0.0264
+(1300,23)      0.0291
+(1301,23)      0.0200
+(1307,23)      0.0292
+(1308,23)      0.0347
+(1309,23)      0.0292
+(1353,23)      0.0126
+(1354,23)      0.0264
+(1355,23)      0.0402
+(1356,23)      0.0425
+(1357,23)      0.0402
+(1358,23)      0.0339
+(1359,23)      0.0291
+(1360,23)      0.0291
+(1361,23)      0.0278
+(1362,23)      0.0267
+(1363,23)      0.0180
+(1366,23)      0.0139
+(1367,23)      0.0401
+(1368,23)      0.0439
+(1369,23)      0.0401
+(1370,23)      0.0126
+(1414,23)      0.0264
+(1415,23)      0.0425
+(1416,23)      0.0453
+(1417,23)      0.0447
+(1418,23)      0.0390
+(1419,23)      0.0291
+(1420,23)      0.0278
+(1421,23)      0.0285
+(1422,23)      0.0278
+(1423,23)      0.0206
+(1424,23)      0.0180
+(1425,23)      0.0180
+(1426,23)      0.0319
+(1427,23)      0.0441
+(1428,23)      0.0451
+(1429,23)      0.0441
+(1430,23)      0.0329
+(1431,23)      0.0126
+(1475,23)      0.0453
+(1476,23)      0.0481
+(1477,23)      0.0453
+(1478,23)      0.0447
+(1479,23)      0.0262
+(1480,23)      0.0234
+(1481,23)      0.0257
+(1482,23)      0.0217
+(1483,23)      0.0213
+(1484,23)      0.0204
+(1485,23)      0.0213
+(1486,23)      0.0319
+(1487,23)      0.0357
+(1488,23)      0.0441
+(1489,23)      0.0467
+(1490,23)      0.0467
+(1491,23)      0.0288
+(1492,23)      0.0162
+(1535,23)      0.0477
+(1536,23)      0.0481
+(1537,23)      0.0453
+(1538,23)      0.0369
+(1539,23)      0.0262
+(1540,23)      0.0217
+(1541,23)      0.0244
+(1542,23)      0.0204
+(1543,23)      0.0213
+(1544,23)      0.0204
+(1545,23)      0.0219
+(1546,23)      0.0299
+(1547,23)      0.0330
+(1548,23)      0.0417
+(1549,23)      0.0531
+(1550,23)      0.0589
+(1551,23)      0.0491
+(1552,23)      0.0287
+(1553,23)      0.0208
+(1594,23)      0.0123
+(1595,23)      0.0423
+(1596,23)      0.0469
+(1597,23)      0.0413
+(1598,23)      0.0369
+(1599,23)      0.0301
+(1600,23)      0.0260
+(1601,23)      0.0244
+(1602,23)      0.0212
+(1603,23)      0.0216
+(1604,23)      0.0196
+(1605,23)      0.0241
+(1606,23)      0.0275
+(1607,23)      0.0299
+(1608,23)      0.0330
+(1609,23)      0.0632
+(1610,23)      0.0653
+(1611,23)      0.0647
+(1612,23)      0.0371
+(1613,23)      0.0270
+(1614,23)      0.0208
+(1654,23)      0.0221
+(1655,23)      0.0391
+(1656,23)      0.0391
+(1657,23)      0.0385
+(1658,23)      0.0371
+(1659,23)      0.0302
+(1660,23)      0.0313
+(1661,23)      0.0260
+(1662,23)      0.0216
+(1663,23)      0.0219
+(1664,23)      0.0219
+(1665,23)      0.0248
+(1666,23)      0.0275
+(1667,23)      0.0276
+(1668,23)      0.0327
+(1669,23)      0.0631
+(1670,23)      0.0647
+(1671,23)      0.0631
+(1672,23)      0.0430
+(1673,23)      0.0366
+(1674,23)      0.0258
+(1675,23)      0.0199
+(1714,23)      0.0297
+(1715,23)      0.0371
+(1716,23)      0.0348
+(1717,23)      0.0361
+(1718,23)      0.0371
+(1719,23)      0.0329
+(1720,23)      0.0337
+(1721,23)      0.0329
+(1722,23)      0.0337
+(1723,23)      0.0357
+(1724,23)      0.0320
+(1725,23)      0.0280
+(1726,23)      0.0280
+(1727,23)      0.0276
+(1728,23)      0.0305
+(1729,23)      0.0398
+(1730,23)      0.0544
+(1731,23)      0.0488
+(1732,23)      0.0457
+(1733,23)      0.0430
+(1734,23)      0.0366
+(1735,23)      0.0233
+(1736,23)      0.0199
+(1737,23)      0.0135
+(1738,23)      0.0118
+(1739,23)      0.0113
+(1773,23)      0.0087
+(1774,23)      0.0297
+(1775,23)      0.0342
+(1776,23)      0.0338
+(1777,23)      0.0348
+(1778,23)      0.0363
+(1779,23)      0.0363
+(1780,23)      0.0386
+(1781,23)      0.0386
+(1782,23)      0.0470
+(1783,23)      0.0401
+(1784,23)      0.0364
+(1785,23)      0.0371
+(1786,23)      0.0371
+(1787,23)      0.0330
+(1788,23)      0.0305
+(1789,23)      0.0242
+(1790,23)      0.0398
+(1791,23)      0.0472
+(1792,23)      0.0472
+(1793,23)      0.0488
+(1794,23)      0.0430
+(1795,23)      0.0327
+(1796,23)      0.0233
+(1797,23)      0.0233
+(1798,23)      0.0202
+(1799,23)      0.0167
+(1800,23)      0.0113
+(1833,23)      0.0087
+(1834,23)      0.0278
+(1835,23)      0.0297
+(1836,23)      0.0297
+(1837,23)      0.0321
+(1838,23)      0.0338
+(1839,23)      0.0363
+(1840,23)      0.0386
+(1841,23)      0.0525
+(1842,23)      0.0588
+(1843,23)      0.0478
+(1844,23)      0.0410
+(1845,23)      0.0410
+(1846,23)      0.0411
+(1847,23)      0.0390
+(1848,23)      0.0209
+(1849,23)      0.0204
+(1850,23)      0.0305
+(1851,23)      0.0398
+(1852,23)      0.0488
+(1853,23)      0.0524
+(1854,23)      0.0457
+(1855,23)      0.0343
+(1856,23)      0.0299
+(1857,23)      0.0327
+(1858,23)      0.0283
+(1859,23)      0.0216
+(1860,23)      0.0138
+(1893,23)      0.0093
+(1894,23)      0.0251
+(1895,23)      0.0283
+(1896,23)      0.0289
+(1897,23)      0.0289
+(1898,23)      0.0267
+(1899,23)      0.0308
+(1900,23)      0.0386
+(1901,23)      0.0620
+(1902,23)      0.0620
+(1903,23)      0.0588
+(1904,23)      0.0411
+(1905,23)      0.0409
+(1906,23)      0.0421
+(1907,23)      0.0409
+(1908,23)      0.0195
+(1909,23)      0.0195
+(1910,23)      0.0242
+(1911,23)      0.0354
+(1912,23)      0.0515
+(1913,23)      0.0532
+(1914,23)      0.0462
+(1915,23)      0.0405
+(1916,23)      0.0343
+(1917,23)      0.0375
+(1918,23)      0.0353
+(1919,23)      0.0260
+(1920,23)      0.0138
+(1952,23)      0.0068
+(1953,23)      0.0179
+(1954,23)      0.0188
+(1955,23)      0.0278
+(1956,23)      0.0283
+(1957,23)      0.0283
+(1958,23)      0.0250
+(1959,23)      0.0260
+(1960,23)      0.0343
+(1961,23)      0.0530
+(1962,23)      0.0589
+(1963,23)      0.0569
+(1964,23)      0.0397
+(1965,23)      0.0371
+(1966,23)      0.0409
+(1967,23)      0.0390
+(1968,23)      0.0243
+(1969,23)      0.0208
+(1970,23)      0.0352
+(1971,23)      0.0394
+(1972,23)      0.0549
+(1973,23)      0.0555
+(1974,23)      0.0474
+(1975,23)      0.0452
+(1976,23)      0.0399
+(1977,23)      0.0399
+(1978,23)      0.0365
+(1979,23)      0.0283
+(1980,23)      0.0235
+(2012,23)      0.0136
+(2013,23)      0.0181
+(2014,23)      0.0188
+(2015,23)      0.0276
+(2016,23)      0.0295
+(2017,23)      0.0295
+(2018,23)      0.0250
+(2019,23)      0.0268
+(2020,23)      0.0386
+(2021,23)      0.0477
+(2022,23)      0.0569
+(2023,23)      0.0530
+(2024,23)      0.0397
+(2025,23)      0.0315
+(2026,23)      0.0397
+(2027,23)      0.0338
+(2028,23)      0.0352
+(2029,23)      0.0338
+(2030,23)      0.0394
+(2031,23)      0.0520
+(2032,23)      0.0529
+(2033,23)      0.0561
+(2034,23)      0.0532
+(2035,23)      0.0474
+(2036,23)      0.0405
+(2037,23)      0.0399
+(2038,23)      0.0341
+(2039,23)      0.0259
+(2040,23)      0.0235
+(2072,23)      0.0150
+(2073,23)      0.0187
+(2074,23)      0.0235
+(2075,23)      0.0277
+(2076,23)      0.0332
+(2077,23)      0.0332
+(2078,23)      0.0321
+(2079,23)      0.0343
+(2080,23)      0.0473
+(2081,23)      0.0477
+(2082,23)      0.0527
+(2083,23)      0.0465
+(2084,23)      0.0431
+(2085,23)      0.0270
+(2086,23)      0.0221
+(2087,23)      0.0315
+(2088,23)      0.0352
+(2089,23)      0.0394
+(2090,23)      0.0529
+(2091,23)      0.0529
+(2092,23)      0.0529
+(2093,23)      0.0549
+(2094,23)      0.0535
+(2095,23)      0.0506
+(2096,23)      0.0403
+(2097,23)      0.0354
+(2098,23)      0.0317
+(2099,23)      0.0264
+(2100,23)      0.0205
+(2131,23)      0.0072
+(2132,23)      0.0125
+(2133,23)      0.0187
+(2134,23)      0.0276
+(2135,23)      0.0299
+(2136,23)      0.0332
+(2137,23)      0.0321
+(2138,23)      0.0321
+(2139,23)      0.0386
+(2140,23)      0.0473
+(2141,23)      0.0473
+(2142,23)      0.0473
+(2143,23)      0.0431
+(2144,23)      0.0416
+(2145,23)      0.0221
+(2146,23)      0.0202
+(2147,23)      0.0202
+(2148,23)      0.0338
+(2149,23)      0.0551
+(2150,23)      0.0551
+(2151,23)      0.0529
+(2152,23)      0.0495
+(2153,23)      0.0495
+(2154,23)      0.0495
+(2155,23)      0.0403
+(2156,23)      0.0356
+(2157,23)      0.0317
+(2158,23)      0.0287
+(2159,23)      0.0233
+(2160,23)      0.0205
+(2191,23)      0.0114
+(2192,23)      0.0125
+(2193,23)      0.0149
+(2194,23)      0.0294
+(2195,23)      0.0305
+(2196,23)      0.0318
+(2197,23)      0.0305
+(2198,23)      0.0318
+(2199,23)      0.0334
+(2200,23)      0.0410
+(2201,23)      0.0394
+(2202,23)      0.0378
+(2203,23)      0.0394
+(2204,23)      0.0327
+(2205,23)      0.0251
+(2206,23)      0.0221
+(2207,23)      0.0233
+(2208,23)      0.0306
+(2209,23)      0.0551
+(2210,23)      0.0551
+(2211,23)      0.0487
+(2212,23)      0.0477
+(2213,23)      0.0476
+(2214,23)      0.0403
+(2215,23)      0.0356
+(2216,23)      0.0312
+(2217,23)      0.0287
+(2218,23)      0.0233
+(2219,23)      0.0210
+(2220,23)      0.0192
+(2250,23)      0.0111
+(2251,23)      0.0149
+(2252,23)      0.0149
+(2253,23)      0.0205
+(2254,23)      0.0320
+(2255,23)      0.0320
+(2256,23)      0.0318
+(2257,23)      0.0287
+(2258,23)      0.0297
+(2259,23)      0.0334
+(2260,23)      0.0368
+(2261,23)      0.0379
+(2262,23)      0.0368
+(2263,23)      0.0394
+(2264,23)      0.0327
+(2265,23)      0.0268
+(2266,23)      0.0233
+(2267,23)      0.0251
+(2268,23)      0.0316
+(2269,23)      0.0508
+(2270,23)      0.0508
+(2271,23)      0.0479
+(2272,23)      0.0441
+(2273,23)      0.0416
+(2274,23)      0.0360
+(2275,23)      0.0304
+(2276,23)      0.0287
+(2277,23)      0.0236
+(2278,23)      0.0210
+(2279,23)      0.0201
+(2280,23)      0.0182
+(2310,23)      0.0217
+(2311,23)      0.0269
+(2312,23)      0.0300
+(2313,23)      0.0300
+(2314,23)      0.0366
+(2315,23)      0.0356
+(2316,23)      0.0324
+(2317,23)      0.0295
+(2318,23)      0.0334
+(2319,23)      0.0378
+(2320,23)      0.0368
+(2321,23)      0.0368
+(2322,23)      0.0253
+(2323,23)      0.0394
+(2324,23)      0.0347
+(2325,23)      0.0347
+(2326,23)      0.0268
+(2327,23)      0.0287
+(2328,23)      0.0340
+(2329,23)      0.0403
+(2330,23)      0.0441
+(2331,23)      0.0468
+(2332,23)      0.0440
+(2333,23)      0.0360
+(2334,23)      0.0304
+(2335,23)      0.0255
+(2336,23)      0.0236
+(2337,23)      0.0202
+(2338,23)      0.0196
+(2339,23)      0.0185
+(2340,23)      0.0174
+(2370,23)      0.0234
+(2371,23)      0.0300
+(2372,23)      0.0312
+(2373,23)      0.0366
+(2374,23)      0.0442
+(2375,23)      0.0396
+(2376,23)      0.0365
+(2377,23)      0.0338
+(2378,23)      0.0448
+(2379,23)      0.0388
+(2380,23)      0.0379
+(2381,23)      0.0102
+(2382,23)      0.0089
+(2383,23)      0.0175
+(2384,23)      0.0347
+(2385,23)      0.0347
+(2386,23)      0.0368
+(2387,23)      0.0316
+(2388,23)      0.0359
+(2389,23)      0.0359
+(2390,23)      0.0430
+(2391,23)      0.0432
+(2392,23)      0.0430
+(2393,23)      0.0352
+(2394,23)      0.0255
+(2395,23)      0.0225
+(2396,23)      0.0221
+(2397,23)      0.0189
+(2398,23)      0.0189
+(2399,23)      0.0182
+(2400,23)      0.0174
+(2430,23)      0.0234
+(2431,23)      0.0300
+(2432,23)      0.0335
+(2433,23)      0.0366
+(2434,23)      0.0366
+(2435,23)      0.0365
+(2436,23)      0.0432
+(2437,23)      0.0447
+(2438,23)      0.0461
+(2439,23)      0.0388
+(2440,23)      0.0102
+(2444,23)      0.0175
+(2445,23)      0.0352
+(2446,23)      0.0374
+(2447,23)      0.0352
+(2448,23)      0.0368
+(2449,23)      0.0377
+(2450,23)      0.0430
+(2451,23)      0.0430
+(2452,23)      0.0382
+(2453,23)      0.0265
+(2454,23)      0.0247
+(2455,23)      0.0231
+(2456,23)      0.0205
+(2457,23)      0.0189
+(2458,23)      0.0189
+(2459,23)      0.0189
+(2460,23)      0.0174
+(2490,23)      0.0155
+(2491,23)      0.0270
+(2492,23)      0.0335
+(2493,23)      0.0341
+(2494,23)      0.0340
+(2495,23)      0.0338
+(2496,23)      0.0365
+(2497,23)      0.0432
+(2498,23)      0.0432
+(2499,23)      0.0226
+(2505,23)      0.0249
+(2506,23)      0.0377
+(2507,23)      0.0376
+(2508,23)      0.0377
+(2509,23)      0.0377
+(2510,23)      0.0417
+(2511,23)      0.0417
+(2512,23)      0.0353
+(2513,23)      0.0265
+(2514,23)      0.0260
+(2515,23)      0.0242
+(2516,23)      0.0222
+(2517,23)      0.0197
+(2518,23)      0.0189
+(2519,23)      0.0196
+(2520,23)      0.0182
+(2551,23)      0.0177
+(2552,23)      0.0213
+(2553,23)      0.0268
+(2554,23)      0.0253
+(2555,23)      0.0268
+(2556,23)      0.0303
+(2557,23)      0.0329
+(2558,23)      0.0277
+(2565,23)      0.0244
+(2566,23)      0.0377
+(2567,23)      0.0377
+(2568,23)      0.0394
+(2569,23)      0.0377
+(2570,23)      0.0377
+(2571,23)      0.0364
+(2572,23)      0.0326
+(2573,23)      0.0262
+(2574,23)      0.0260
+(2575,23)      0.0260
+(2576,23)      0.0242
+(2577,23)      0.0215
+(2578,23)      0.0184
+(2579,23)      0.0193
+(2580,23)      0.0182
+(2611,23)      0.0121
+(2612,23)      0.0129
+(2613,23)      0.0183
+(2614,23)      0.0175
+(2615,23)      0.0242
+(2616,23)      0.0268
+(2617,23)      0.0277
+(2618,23)      0.0141
+(2626,23)      0.0299
+(2627,23)      0.0350
+(2628,23)      0.0350
+(2629,23)      0.0347
+(2630,23)      0.0362
+(2631,23)      0.0324
+(2632,23)      0.0308
+(2633,23)      0.0260
+(2634,23)      0.0272
+(2635,23)      0.0295
+(2636,23)      0.0295
+(2637,23)      0.0230
+(2638,23)      0.0182
+(2639,23)      0.0165
+(2640,23)      0.0163
+(2670,23)      0.0096
+(2671,23)      0.0115
+(2672,23)      0.0077
+(2673,23)      0.0129
+(2674,23)      0.0153
+(2675,23)      0.0211
+(2676,23)      0.0264
+(2677,23)      0.0264
+(2686,23)      0.0183
+(2687,23)      0.0321
+(2688,23)      0.0347
+(2689,23)      0.0323
+(2690,23)      0.0323
+(2691,23)      0.0321
+(2692,23)      0.0282
+(2693,23)      0.0255
+(2694,23)      0.0264
+(2695,23)      0.0295
+(2696,23)      0.0295
+(2697,23)      0.0239
+(2698,23)      0.0165
+(2699,23)      0.0159
+(2700,23)      0.0116
+(2730,23)      0.0115
+(2731,23)      0.0115
+(2732,23)      0.0096
+(2733,23)      0.0129
+(2734,23)      0.0155
+(2735,23)      0.0211
+(2736,23)      0.0268
+(2737,23)      0.0264
+(2746,23)      0.0183
+(2747,23)      0.0314
+(2748,23)      0.0350
+(2749,23)      0.0315
+(2750,23)      0.0315
+(2751,23)      0.0293
+(2752,23)      0.0258
+(2753,23)      0.0255
+(2754,23)      0.0264
+(2755,23)      0.0292
+(2756,23)      0.0292
+(2757,23)      0.0243
+(2758,23)      0.0163
+(2759,23)      0.0159
+(2760,23)      0.0094
+(2790,23)      0.0079
+(2791,23)      0.0079
+(2792,23)      0.0145
+(2793,23)      0.0145
+(2794,23)      0.0155
+(2795,23)      0.0245
+(2796,23)      0.0319
+(2797,23)      0.0319
+(2806,23)      0.0256
+(2807,23)      0.0314
+(2808,23)      0.0369
+(2809,23)      0.0314
+(2810,23)      0.0315
+(2811,23)      0.0283
+(2812,23)      0.0258
+(2813,23)      0.0245
+(2814,23)      0.0253
+(2815,23)      0.0292
+(2816,23)      0.0294
+(2817,23)      0.0256
+(2818,23)      0.0181
+(2819,23)      0.0159
+(2820,23)      0.0089
+(2852,23)      0.0155
+(2853,23)      0.0158
+(2854,23)      0.0158
+(2855,23)      0.0223
+(2856,23)      0.0367
+(2857,23)      0.0367
+(2858,23)      0.0111
+(2866,23)      0.0433
+(2867,23)      0.0433
+(2868,23)      0.0369
+(2869,23)      0.0283
+(2870,23)      0.0345
+(2871,23)      0.0278
+(2872,23)      0.0245
+(2873,23)      0.0245
+(2874,23)      0.0253
+(2875,23)      0.0294
+(2876,23)      0.0295
+(2877,23)      0.0256
+(2878,23)      0.0201
+(2879,23)      0.0161
+(2880,23)      0.0089
+(2912,23)      0.0185
+(2913,23)      0.0192
+(2914,23)      0.0185
+(2915,23)      0.0192
+(2916,23)      0.0264
+(2917,23)      0.0264
+(2918,23)      0.0165
+(2926,23)      0.0496
+(2927,23)      0.0496
+(2928,23)      0.0369
+(2929,23)      0.0345
+(2930,23)      0.0349
+(2931,23)      0.0265
+(2932,23)      0.0245
+(2933,23)      0.0245
+(2934,23)      0.0255
+(2935,23)      0.0308
+(2936,23)      0.0308
+(2937,23)      0.0230
+(2938,23)      0.0214
+(2939,23)      0.0201
+(2940,23)      0.0128
+(2973,23)      0.0185
+(2974,23)      0.0175
+(2975,23)      0.0175
+(2976,23)      0.0192
+(2977,23)      0.0233
+(2978,23)      0.0165
+(2985,23)      0.0259
+(2986,23)      0.0515
+(2987,23)      0.0515
+(2988,23)      0.0432
+(2989,23)      0.0350
+(2990,23)      0.0345
+(2991,23)      0.0265
+(2992,23)      0.0265
+(2993,23)      0.0255
+(2994,23)      0.0270
+(2995,23)      0.0320
+(2996,23)      0.0323
+(2997,23)      0.0230
+(2998,23)      0.0219
+(2999,23)      0.0214
+(3000,23)      0.0175
+(3035,23)      0.0105
+(3036,23)      0.0175
+(3037,23)      0.0165
+(3038,23)      0.0081
+(3041,23)      0.0148
+(3042,23)      0.0170
+(3043,23)      0.0259
+(3044,23)      0.0259
+(3045,23)      0.0469
+(3046,23)      0.0515
+(3047,23)      0.0515
+(3048,23)      0.0432
+(3049,23)      0.0397
+(3050,23)      0.0333
+(3051,23)      0.0304
+(3052,23)      0.0292
+(3053,23)      0.0270
+(3054,23)      0.0284
+(3055,23)      0.0324
+(3056,23)      0.0349
+(3057,23)      0.0337
+(3058,23)      0.0219
+(3059,23)      0.0213
+(3060,23)      0.0160
+(3096,23)      0.0105
+(3097,23)      0.0081
+(3098,23)      0.0081
+(3099,23)      0.0071
+(3100,23)      0.0143
+(3101,23)      0.0250
+(3102,23)      0.0283
+(3103,23)      0.0291
+(3104,23)      0.0439
+(3105,23)      0.0498
+(3106,23)      0.0502
+(3107,23)      0.0442
+(3108,23)      0.0432
+(3109,23)      0.0397
+(3110,23)      0.0316
+(3111,23)      0.0311
+(3112,23)      0.0292
+(3113,23)      0.0268
+(3114,23)      0.0284
+(3115,23)      0.0324
+(3116,23)      0.0388
+(3117,23)      0.0388
+(3118,23)      0.0220
+(3119,23)      0.0171
+(3120,23)      0.0129
+(3157,23)      0.0071
+(3158,23)      0.0088
+(3159,23)      0.0113
+(3160,23)      0.0148
+(3161,23)      0.0250
+(3162,23)      0.0346
+(3163,23)      0.0439
+(3164,23)      0.0475
+(3165,23)      0.0498
+(3166,23)      0.0480
+(3167,23)      0.0442
+(3168,23)      0.0432
+(3169,23)      0.0345
+(3170,23)      0.0315
+(3171,23)      0.0301
+(3172,23)      0.0224
+(3173,23)      0.0224
+(3174,23)      0.0224
+(3175,23)      0.0296
+(3176,23)      0.0636
+(3177,23)      0.0636
+(3178,23)      0.0244
+(3179,23)      0.0161
+(3180,23)      0.0129
+(3218,23)      0.0088
+(3219,23)      0.0108
+(3220,23)      0.0143
+(3221,23)      0.0238
+(3222,23)      0.0273
+(3223,23)      0.0391
+(3224,23)      0.0456
+(3225,23)      0.0475
+(3226,23)      0.0456
+(3227,23)      0.0432
+(3228,23)      0.0394
+(3229,23)      0.0345
+(3230,23)      0.0313
+(3231,23)      0.0268
+(3232,23)      0.0216
+(3233,23)      0.0211
+(3234,23)      0.0211
+(3235,23)      0.0231
+(3236,23)      0.0337
+(3237,23)      0.0337
+(3238,23)      0.0302
+(3239,23)      0.0201
+(3240,23)      0.0136
+(3280,23)      0.0108
+(3281,23)      0.0153
+(3282,23)      0.0268
+(3283,23)      0.0346
+(3284,23)      0.0391
+(3285,23)      0.0456
+(3286,23)      0.0456
+(3287,23)      0.0428
+(3288,23)      0.0390
+(3289,23)      0.0348
+(3290,23)      0.0301
+(3291,23)      0.0219
+(3292,23)      0.0200
+(3293,23)      0.0188
+(3294,23)      0.0175
+(3295,23)      0.0176
+(3296,23)      0.0241
+(3297,23)      0.0311
+(3298,23)      0.0264
+(3299,23)      0.0201
+(3300,23)      0.0136
+(3342,23)      0.0167
+(3343,23)      0.0314
+(3344,23)      0.0335
+(3345,23)      0.0391
+(3346,23)      0.0390
+(3347,23)      0.0390
+(3348,23)      0.0355
+(3349,23)      0.0348
+(3350,23)      0.0323
+(3351,23)      0.0220
+(3352,23)      0.0210
+(3353,23)      0.0182
+(3354,23)      0.0176
+(3355,23)      0.0176
+(3356,23)      0.0213
+(3357,23)      0.0241
+(3358,23)      0.0204
+(3359,23)      0.0152
+(3360,23)      0.0106
+(3402,23)      0.0153
+(3403,23)      0.0251
+(3404,23)      0.0273
+(3405,23)      0.0305
+(3406,23)      0.0305
+(3407,23)      0.0330
+(3408,23)      0.0330
+(3409,23)      0.0320
+(3410,23)      0.0293
+(3411,23)      0.0229
+(3412,23)      0.0214
+(3413,23)      0.0176
+(3414,23)      0.0175
+(3415,23)      0.0197
+(3416,23)      0.0211
+(3417,23)      0.0204
+(3418,23)      0.0152
+(3419,23)      0.0121
+(3420,23)      0.0073
+(3461,23)      0.0094
+(3462,23)      0.0161
+(3463,23)      0.0250
+(3464,23)      0.0264
+(3465,23)      0.0286
+(3466,23)      0.0294
+(3467,23)      0.0297
+(3468,23)      0.0297
+(3469,23)      0.0293
+(3470,23)      0.0264
+(3471,23)      0.0229
+(3472,23)      0.0210
+(3473,23)      0.0176
+(3474,23)      0.0176
+(3475,23)      0.0206
+(3476,23)      0.0206
+(3477,23)      0.0174
+(3478,23)      0.0122
+(3479,23)      0.0081
+(3520,23)      0.0092
+(3521,23)      0.0138
+(3522,23)      0.0161
+(3523,23)      0.0220
+(3524,23)      0.0264
+(3525,23)      0.0275
+(3526,23)      0.0284
+(3527,23)      0.0284
+(3528,23)      0.0275
+(3529,23)      0.0260
+(3530,23)      0.0260
+(3531,23)      0.0240
+(3532,23)      0.0190
+(3533,23)      0.0180
+(3534,23)      0.0174
+(3535,23)      0.0197
+(3536,23)      0.0197
+(3537,23)      0.0125
+(3538,23)      0.0089
+(3539,23)      0.0073
+(3580,23)      0.0066
+(3581,23)      0.0138
+(3582,23)      0.0149
+(3583,23)      0.0210
+(3584,23)      0.0264
+(3585,23)      0.0275
+(3586,23)      0.0284
+(3587,23)      0.0275
+(3588,23)      0.0275
+(3589,23)      0.0260
+(3590,23)      0.0276
+(3591,23)      0.0260
+(3592,23)      0.0222
+(3593,23)      0.0190
+(3594,23)      0.0180
+(3595,23)      0.0185
+(3596,23)      0.0150
+(3597,23)      0.0090
+(3598,23)      0.0081
+(3599,23)      0.0068
+(3643,23)      0.0201
+(3644,23)      0.0249
+(3645,23)      0.0275
+(3646,23)      0.0289
+(3647,23)      0.0289
+(3648,23)      0.0290
+(3649,23)      0.0301
+(3650,23)      0.0309
+(3651,23)      0.0301
+(3652,23)      0.0222
+(3653,23)      0.0197
+(3654,23)      0.0185
+(3655,23)      0.0185
+(3656,23)      0.0150
+(3657,23)      0.0068
+(3658,23)      0.0067
+(3704,23)      0.0245
+(3705,23)      0.0290
+(3706,23)      0.0290
+(3707,23)      0.0300
+(3708,23)      0.0300
+(3709,23)      0.0338
+(3710,23)      0.0303
+(3711,23)      0.0293
+(3712,23)      0.0206
+(3713,23)      0.0197
+(3714,23)      0.0172
+(3715,23)      0.0165
+(3716,23)      0.0147
+(3717,23)      0.0068
+(3764,23)      0.0150
+(3765,23)      0.0290
+(3766,23)      0.0290
+(3767,23)      0.0319
+(3768,23)      0.0299
+(3769,23)      0.0301
+(3770,23)      0.0296
+(3771,23)      0.0220
+(3772,23)      0.0197
+(3773,23)      0.0172
+(3774,23)      0.0142
+(3775,23)      0.0158
+(3776,23)      0.0129
+(3777,23)      0.0079
+(3825,23)      0.0191
+(3826,23)      0.0244
+(3827,23)      0.0299
+(3828,23)      0.0299
+(3829,23)      0.0299
+(3830,23)      0.0235
+(3831,23)      0.0209
+(3832,23)      0.0176
+(3833,23)      0.0142
+(3835,23)      0.0072
+(3836,23)      0.0079
+(3837,23)      0.0072
+(3886,23)      0.0203
+(3887,23)      0.0265
+(3888,23)      0.0273
+(3889,23)      0.0273
+(3890,23)      0.0209
+(3891,23)      0.0180
+(3892,23)      0.0173
+(3946,23)      0.0183
+(3947,23)      0.0207
+(3948,23)      0.0203
+(3949,23)      0.0200
+(3950,23)      0.0172
+(3951,23)      0.0172
+(3952,23)      0.0168
+(4006,23)      0.0110
+(4007,23)      0.0200
+(4008,23)      0.0198
+(4009,23)      0.0167
+(4010,23)      0.0166
+(4011,23)      0.0156
+(4012,23)      0.0113
+(4066,23)      0.0093
+(4067,23)      0.0162
+(4068,23)      0.0162
+(4069,23)      0.0156
+(4070,23)      0.0128
+(4071,23)      0.0113
+(4127,23)      0.0093
+(4128,23)      0.0102
+(4129,23)      0.0128
+(4130,23)      0.0102
+(4188,23)      0.0077
+(4189,23)      0.0097
+(4190,23)      0.0085
+(4249,23)      0.0077
+(4250,23)      0.0081
+(3745,24)      0.0192
+(3805,24)      0.0241
+(3806,24)      0.0241
+(3864,24)      0.0160
+(3865,24)      0.0291
+(3866,24)      0.0200
+(3924,24)      0.0160
+(3925,24)      0.0370
+(3926,24)      0.0291
+(3984,24)      0.0371
+(3985,24)      0.0501
+(3986,24)      0.0480
+(3987,24)      0.0357
+(3995,24)      0.0175
+(3996,24)      0.0175
+(4044,24)      0.0578
+(4045,24)      0.0669
+(4046,24)      0.0669
+(4047,24)      0.0604
+(4048,24)      0.0291
+(4055,24)      0.0313
+(4056,24)      0.0313
+(4104,24)      0.0578
+(4105,24)      0.0722
+(4106,24)      0.0780
+(4107,24)      0.0739
+(4108,24)      0.0604
+(4109,24)      0.0368
+(4114,24)      0.0313
+(4115,24)      0.0404
+(4116,24)      0.0386
+(4117,24)      0.0287
+(4163,24)      0.0254
+(4164,24)      0.0337
+(4165,24)      0.0703
+(4166,24)      0.0783
+(4167,24)      0.0820
+(4168,24)      0.0878
+(4169,24)      0.0604
+(4170,24)      0.0370
+(4173,24)      0.0435
+(4174,24)      0.0536
+(4175,24)      0.0532
+(4176,24)      0.0439
+(4177,24)      0.0359
+(4223,24)      0.0220
+(4224,24)      0.0266
+(4225,24)      0.0455
+(4226,24)      0.0703
+(4227,24)      0.0817
+(4228,24)      0.0878
+(4229,24)      0.0817
+(4230,24)      0.0812
+(4231,24)      0.0435
+(4232,24)      0.0435
+(4233,24)      0.0536
+(4234,24)      0.0773
+(4235,24)      0.0764
+(4236,24)      0.0443
+(4237,24)      0.0386
+(4238,24)      0.0307
+(4284,24)      0.0254
+(4285,24)      0.0302
+(4286,24)      0.0626
+(4287,24)      0.0626
+(4288,24)      0.0740
+(4289,24)      0.0878
+(4290,24)      0.0896
+(4291,24)      0.0896
+(4292,24)      0.0773
+(4293,24)      0.0918
+(4294,24)      0.0918
+(4295,24)      0.0869
+(4296,24)      0.0467
+(4297,24)      0.0348
+(4298,24)      0.0307
+(4345,24)      0.0283
+(4346,24)      0.0388
+(4347,24)      0.0487
+(4348,24)      0.0626
+(4349,24)      0.0740
+(4350,24)      0.0898
+(4351,24)      0.0952
+(4352,24)      0.0996
+(4353,24)      0.1083
+(4354,24)      0.1021
+(4355,24)      0.0937
+(4356,24)      0.0421
+(4357,24)      0.0339
+(4358,24)      0.0184
+(4405,24)      0.0283
+(4406,24)      0.0325
+(4407,24)      0.0571
+(4408,24)      0.0575
+(4409,24)      0.0589
+(4410,24)      0.0858
+(4411,24)      0.0952
+(4412,24)      0.1093
+(4413,24)      0.1111
+(4414,24)      0.1107
+(4415,24)      0.0937
+(4416,24)      0.0411
+(4417,24)      0.0184
+(4465,24)      0.0291
+(4466,24)      0.0571
+(4467,24)      0.0697
+(4468,24)      0.0588
+(4469,24)      0.0589
+(4470,24)      0.0846
+(4471,24)      0.0886
+(4472,24)      0.1094
+(4473,24)      0.1235
+(4474,24)      0.1134
+(4475,24)      0.0833
+(4476,24)      0.0327
+(4525,24)      0.0347
+(4526,24)      0.0863
+(4527,24)      0.0937
+(4528,24)      0.0697
+(4529,24)      0.0697
+(4530,24)      0.0830
+(4531,24)      0.0886
+(4532,24)      0.1094
+(4533,24)      0.1235
+(4534,24)      0.1134
+(4535,24)      0.0803
+(4584,24)      0.0188
+(4585,24)      0.0371
+(4586,24)      0.0863
+(4587,24)      0.1019
+(4588,24)      0.0769
+(4589,24)      0.0859
+(4590,24)      0.0830
+(4591,24)      0.0884
+(4592,24)      0.1023
+(4593,24)      0.1267
+(4594,24)      0.1267
+(4595,24)      0.0803
+(4643,24)      0.0181
+(4644,24)      0.0234
+(4645,24)      0.0606
+(4646,24)      0.0947
+(4647,24)      0.1067
+(4648,24)      0.0863
+(4649,24)      0.0859
+(4650,24)      0.0806
+(4651,24)      0.0860
+(4652,24)      0.1015
+(4653,24)      0.1303
+(4654,24)      0.1303
+(4655,24)      0.0860
+(4702,24)      0.0153
+(4703,24)      0.0202
+(4704,24)      0.0530
+(4705,24)      0.1274
+(4706,24)      0.1371
+(4707,24)      0.1379
+(4708,24)      0.1067
+(4709,24)      0.1017
+(4710,24)      0.0806
+(4711,24)      0.0860
+(4712,24)      0.1015
+(4713,24)      0.1273
+(4714,24)      0.1303
+(4715,24)      0.0875
+(4763,24)      0.0153
+(4764,24)      0.0153
+(4765,24)      0.1028
+(4766,24)      0.1028
+(4767,24)      0.1371
+(4768,24)      0.0947
+(4769,24)      0.0806
+(4770,24)      0.0726
+(4771,24)      0.0726
+(4772,24)      0.0747
+(4773,24)      0.1027
+(4774,24)      0.1244
+  (35,25)      0.0457
+  (36,25)      0.0775
+  (37,25)      0.0775
+  (38,25)      0.0703
+  (39,25)      0.0703
+  (40,25)      0.0398
+  (41,25)      0.0289
+  (42,25)      0.0258
+  (46,25)      0.0197
+  (47,25)      0.0197
+  (94,25)      0.0369
+  (95,25)      0.0761
+  (96,25)      0.0895
+  (97,25)      0.1191
+  (98,25)      0.0887
+  (99,25)      0.0783
+ (100,25)      0.0735
+ (101,25)      0.0430
+ (102,25)      0.0338
+ (103,25)      0.0258
+ (104,25)      0.0206
+ (105,25)      0.0207
+ (106,25)      0.0227
+ (107,25)      0.0239
+ (108,25)      0.0181
+ (155,25)      0.0641
+ (156,25)      0.1334
+ (157,25)      0.1464
+ (158,25)      0.1191
+ (159,25)      0.0839
+ (160,25)      0.0735
+ (161,25)      0.0483
+ (162,25)      0.0398
+ (163,25)      0.0321
+ (164,25)      0.0258
+ (165,25)      0.0227
+ (166,25)      0.0227
+ (167,25)      0.0211
+ (215,25)      0.0434
+ (216,25)      0.1464
+ (217,25)      0.1479
+ (218,25)      0.1465
+ (219,25)      0.0736
+ (220,25)      0.0616
+ (221,25)      0.0483
+ (222,25)      0.0430
+ (223,25)      0.0351
+ (224,25)      0.0299
+ (225,25)      0.0298
+ (226,25)      0.0227
+ (276,25)      0.0750
+ (277,25)      0.1464
+ (278,25)      0.1392
+ (279,25)      0.0736
+ (280,25)      0.0616
+ (281,25)      0.0483
+ (282,25)      0.0422
+ (283,25)      0.0422
+ (284,25)      0.0376
+ (285,25)      0.0321
+ (286,25)      0.0150
+ (336,25)      0.0263
+ (337,25)      0.1324
+ (338,25)      0.1324
+ (339,25)      0.0760
+ (340,25)      0.0616
+ (341,25)      0.0481
+ (342,25)      0.0440
+ (343,25)      0.0486
+ (344,25)      0.0501
+ (345,25)      0.0486
+ (397,25)      0.1124
+ (398,25)      0.1124
+ (399,25)      0.0994
+ (400,25)      0.0701
+ (401,25)      0.0481
+ (402,25)      0.0440
+ (403,25)      0.0602
+ (404,25)      0.0579
+ (405,25)      0.0532
+ (406,25)      0.0202
+ (457,25)      0.1079
+ (458,25)      0.1112
+ (459,25)      0.0994
+ (460,25)      0.0802
+ (461,25)      0.0481
+ (462,25)      0.0481
+ (463,25)      0.0622
+ (464,25)      0.0622
+ (465,25)      0.0532
+ (466,25)      0.0202
+ (517,25)      0.1073
+ (518,25)      0.1106
+ (519,25)      0.0957
+ (520,25)      0.0802
+ (521,25)      0.0590
+ (522,25)      0.0590
+ (523,25)      0.0622
+ (524,25)      0.0622
+ (525,25)      0.0298
+ (567,25)      0.0557
+ (568,25)      0.0557
+ (576,25)      0.0472
+ (577,25)      0.0943
+ (578,25)      0.0957
+ (579,25)      0.0943
+ (580,25)      0.0771
+ (581,25)      0.0657
+ (582,25)      0.0622
+ (583,25)      0.0622
+ (584,25)      0.0575
+ (626,25)      0.0264
+ (627,25)      0.0557
+ (628,25)      0.0417
+ (629,25)      0.0330
+ (633,25)      0.0194
+ (634,25)      0.0224
+ (635,25)      0.0472
+ (636,25)      0.0855
+ (637,25)      0.0855
+ (638,25)      0.0771
+ (639,25)      0.0771
+ (640,25)      0.0710
+ (641,25)      0.0657
+ (642,25)      0.0617
+ (643,25)      0.0575
+ (644,25)      0.0497
+ (686,25)      0.0269
+ (687,25)      0.0557
+ (688,25)      0.0417
+ (689,25)      0.0557
+ (690,25)      0.0680
+ (691,25)      0.0514
+ (692,25)      0.0467
+ (693,25)      0.0467
+ (694,25)      0.0499
+ (695,25)      0.0659
+ (696,25)      0.0933
+ (697,25)      0.0849
+ (698,25)      0.0763
+ (699,25)      0.0710
+ (700,25)      0.0657
+ (701,25)      0.0656
+ (702,25)      0.0527
+ (703,25)      0.0497
+ (704,25)      0.0287
+ (745,25)      0.0190
+ (746,25)      0.0264
+ (747,25)      0.0330
+ (748,25)      0.0417
+ (749,25)      0.0803
+ (750,25)      0.0784
+ (751,25)      0.0690
+ (752,25)      0.0591
+ (753,25)      0.0577
+ (754,25)      0.0655
+ (755,25)      0.0830
+ (756,25)      0.0884
+ (757,25)      0.0849
+ (758,25)      0.0699
+ (759,25)      0.0657
+ (760,25)      0.0573
+ (761,25)      0.0388
+ (762,25)      0.0386
+ (763,25)      0.0287
+ (764,25)      0.0253
+ (805,25)      0.0190
+ (806,25)      0.0190
+ (807,25)      0.0190
+ (808,25)      0.0735
+ (809,25)      0.0814
+ (810,25)      0.0814
+ (811,25)      0.0703
+ (812,25)      0.0591
+ (813,25)      0.0591
+ (814,25)      0.0640
+ (815,25)      0.0677
+ (816,25)      0.0849
+ (817,25)      0.0829
+ (818,25)      0.0689
+ (819,25)      0.0638
+ (820,25)      0.0388
+ (821,25)      0.0148
+ (822,25)      0.0148
+ (823,25)      0.0189
+ (868,25)      0.0317
+ (869,25)      0.0813
+ (870,25)      0.0813
+ (871,25)      0.0621
+ (872,25)      0.0588
+ (873,25)      0.0588
+ (874,25)      0.0582
+ (875,25)      0.0582
+ (876,25)      0.0677
+ (877,25)      0.0677
+ (878,25)      0.0618
+ (879,25)      0.0570
+ (880,25)      0.0148
+ (928,25)      0.0241
+ (929,25)      0.0619
+ (930,25)      0.0619
+ (931,25)      0.0593
+ (932,25)      0.0564
+ (933,25)      0.0582
+ (934,25)      0.0509
+ (935,25)      0.0501
+ (936,25)      0.0509
+ (937,25)      0.0511
+ (938,25)      0.0578
+ (939,25)      0.0464
+ (989,25)      0.0365
+ (990,25)      0.0431
+ (991,25)      0.0480
+ (992,25)      0.0480
+ (993,25)      0.0582
+ (994,25)      0.0508
+ (995,25)      0.0501
+ (996,25)      0.0443
+ (997,25)      0.0464
+ (998,25)      0.0511
+ (999,25)      0.0445
+(1049,25)      0.0235
+(1050,25)      0.0351
+(1051,25)      0.0431
+(1052,25)      0.0437
+(1053,25)      0.0463
+(1054,25)      0.0463
+(1055,25)      0.0465
+(1056,25)      0.0428
+(1057,25)      0.0428
+(1058,25)      0.0445
+(1059,25)      0.0410
+(1109,25)      0.0155
+(1110,25)      0.0237
+(1111,25)      0.0351
+(1112,25)      0.0351
+(1113,25)      0.0345
+(1114,25)      0.0386
+(1115,25)      0.0413
+(1116,25)      0.0386
+(1117,25)      0.0306
+(1118,25)      0.0337
+(1119,25)      0.0282
+(1120,25)      0.0241
+(1170,25)      0.0235
+(1171,25)      0.0252
+(1172,25)      0.0323
+(1173,25)      0.0323
+(1174,25)      0.0327
+(1175,25)      0.0345
+(1176,25)      0.0288
+(1177,25)      0.0236
+(1178,25)      0.0218
+(1179,25)      0.0241
+(1180,25)      0.0234
+(1231,25)      0.0227
+(1232,25)      0.0201
+(1233,25)      0.0227
+(1234,25)      0.0233
+(1235,25)      0.0288
+(1236,25)      0.0233
+(1239,25)      0.0217
+(1293,25)      0.0201
+(1294,25)      0.0233
+(1295,25)      0.0276
+ (536,26)      0.0133
+ (596,26)      0.0138
+ (597,26)      0.0138
+ (655,26)      0.0133
+ (656,26)      0.0157
+ (657,26)      0.0192
+ (658,26)      0.0157
+ (715,26)      0.0254
+ (716,26)      0.0257
+ (717,26)      0.0369
+ (718,26)      0.0221
+ (719,26)      0.0315
+ (774,26)      0.0189
+ (775,26)      0.0424
+ (776,26)      0.0465
+ (777,26)      0.0513
+ (778,26)      0.0501
+ (779,26)      0.0526
+ (780,26)      0.0315
+ (834,26)      0.0218
+ (835,26)      0.0513
+ (836,26)      0.0578
+ (837,26)      0.0604
+ (838,26)      0.0540
+ (839,26)      0.0541
+ (840,26)      0.0537
+ (890,26)      0.0134
+ (891,26)      0.0150
+ (892,26)      0.0150
+ (893,26)      0.0218
+ (894,26)      0.0540
+ (895,26)      0.0604
+ (896,26)      0.0612
+ (897,26)      0.0684
+ (898,26)      0.0604
+ (899,26)      0.0563
+ (900,26)      0.0501
+ (949,26)      0.0228
+ (950,26)      0.0276
+ (951,26)      0.0313
+ (952,26)      0.0313
+ (953,26)      0.0540
+ (954,26)      0.0612
+ (955,26)      0.0732
+ (956,26)      0.0840
+ (957,26)      0.0715
+ (958,26)      0.0684
+ (959,26)      0.0541
+ (960,26)      0.0444
+(1008,26)      0.0205
+(1009,26)      0.0406
+(1010,26)      0.0438
+(1011,26)      0.0649
+(1012,26)      0.0649
+(1013,26)      0.0767
+(1014,26)      0.0849
+(1015,26)      0.0966
+(1016,26)      0.0978
+(1017,26)      0.0909
+(1018,26)      0.0692
+(1019,26)      0.0563
+(1020,26)      0.0444
+(1067,26)      0.0159
+(1068,26)      0.0356
+(1069,26)      0.0495
+(1070,26)      0.0767
+(1071,26)      0.0808
+(1072,26)      0.0791
+(1073,26)      0.0923
+(1074,26)      0.0978
+(1075,26)      0.1023
+(1076,26)      0.1019
+(1077,26)      0.0990
+(1078,26)      0.0858
+(1079,26)      0.0596
+(1080,26)      0.0475
+(1127,26)      0.0205
+(1128,26)      0.0430
+(1129,26)      0.0737
+(1130,26)      0.1061
+(1131,26)      0.1079
+(1132,26)      0.1079
+(1133,26)      0.1159
+(1134,26)      0.1196
+(1135,26)      0.1162
+(1136,26)      0.1027
+(1137,26)      0.1023
+(1138,26)      0.0990
+(1139,26)      0.0778
+(1140,26)      0.0578
+(1187,26)      0.0306
+(1188,26)      0.0619
+(1189,26)      0.0821
+(1190,26)      0.1196
+(1191,26)      0.1196
+(1192,26)      0.1173
+(1193,26)      0.1199
+(1194,26)      0.1199
+(1195,26)      0.1172
+(1196,26)      0.1085
+(1197,26)      0.1085
+(1198,26)      0.1048
+(1199,26)      0.0778
+(1200,26)      0.0636
+(1247,26)      0.0306
+(1248,26)      0.0414
+(1249,26)      0.0821
+(1250,26)      0.1127
+(1251,26)      0.1173
+(1252,26)      0.1173
+(1253,26)      0.1173
+(1254,26)      0.1172
+(1255,26)      0.1142
+(1256,26)      0.1117
+(1257,26)      0.1117
+(1258,26)      0.1048
+(1259,26)      0.0778
+(1260,26)      0.0742
+(1306,26)      0.0198
+(1307,26)      0.0303
+(1308,26)      0.0327
+(1309,26)      0.0414
+(1310,26)      0.1006
+(1311,26)      0.1027
+(1312,26)      0.1027
+(1313,26)      0.1008
+(1314,26)      0.1115
+(1315,26)      0.1117
+(1316,26)      0.1085
+(1317,26)      0.1085
+(1318,26)      0.0905
+(1319,26)      0.0763
+(1320,26)      0.0608
+(1365,26)      0.0173
+(1366,26)      0.0198
+(1367,26)      0.0198
+(1368,26)      0.0280
+(1369,26)      0.0327
+(1370,26)      0.0910
+(1371,26)      0.0916
+(1372,26)      0.0910
+(1373,26)      0.0890
+(1374,26)      0.0902
+(1375,26)      0.0984
+(1376,26)      0.0959
+(1377,26)      0.0931
+(1378,26)      0.0732
+(1379,26)      0.0608
+(1380,26)      0.0528
+(1426,26)      0.0173
+(1427,26)      0.0155
+(1428,26)      0.0155
+(1429,26)      0.0272
+(1430,26)      0.0327
+(1431,26)      0.0846
+(1432,26)      0.0861
+(1433,26)      0.0846
+(1434,26)      0.0861
+(1435,26)      0.0878
+(1436,26)      0.0905
+(1437,26)      0.0732
+(1438,26)      0.0517
+(1439,26)      0.0472
+(1440,26)      0.0389
+(1491,26)      0.0327
+(1492,26)      0.0447
+(1493,26)      0.0806
+(1494,26)      0.0834
+(1495,26)      0.0837
+(1496,26)      0.0837
+(1497,26)      0.0517
+(1498,26)      0.0462
+(1499,26)      0.0400
+(1500,26)      0.0386
+(1553,26)      0.0414
+(1554,26)      0.0806
+(1555,26)      0.0819
+(1556,26)      0.0738
+(1557,26)      0.0522
+(1558,26)      0.0462
+(1559,26)      0.0400
+(1560,26)      0.0384
+(1614,26)      0.0414
+(1615,26)      0.0555
+(1616,26)      0.0540
+(1617,26)      0.0540
+(1618,26)      0.0517
+(1619,26)      0.0409
+(1620,26)      0.0378
+(1674,26)      0.0257
+(1675,26)      0.0405
+(1676,26)      0.0422
+(1677,26)      0.0522
+(1678,26)      0.0409
+(1679,26)      0.0378
+(1680,26)      0.0215
+(1735,26)      0.0189
+(1736,26)      0.0240
+(1737,26)      0.0240
+(1738,26)      0.0240
+(1739,26)      0.0215
+
+</pre><img vspace="5" hspace="5" src="CaImSegmentation_01.png" alt=""> <p class="footer"><br><a href="http://www.mathworks.com/products/matlab/">Published with MATLAB&reg; R2016a</a><br></p></div><!--
+##### SOURCE BEGIN #####
+function [SpatMap,CaSignal,Spikes,width,height] = CaImSegmentation(VideoFileName,maxNeurons,estNeuronSize)
+%CaImSegmentation.m
+%   See Pnevmatikakis & Paninski, 2014 & 2016, for their matrix factorization
+%     algorithm to automate image segmentation for calcium imaging data.
+%     Briefly, if d is the total number of pixels in an image, T is the number
+%     of time steps in a video, and K is the maximum number of neurons, then 
+%     the observed fluorescence signal Y (matrix size d-by-T) can be
+%     regarded as a noisy function of the true signal,F, by Y = F + E, where E is
+%     Gaussian noise.  F, in turn, can be regarded as a signal of the form
+%     F = AC+B, where A is a d-by-K matrix representing the spatial footprint
+%     of neuron k, C is a K-by-T matrix representing the calcium activity of
+%     the k-th neuron, and B is a d-by-T matrix representing the background
+%     fluorescence at each pixel.  The algorithmopen  infers the matrices
+%     A and C from the observed fluorescence signal Y using matrix factorization
+%     and convex optimization based on several assumptions:
+%       1) the difference between F = AC+B and Y will be the noise E, thus
+%        constraining the following steps to find values for A, C, and B
+%        that force abs(Y-F) < noise ... they make an estimate of the noise
+%        as a first step in the algorithm
+%       2) each neuron will be small relative to the size of the original
+%        image, of approximate size based on the input estNeuronSize, so 
+%        the matrix A should be sparse
+%       3) the calcium signal, C, for each neuron will be an AR(p) process
+%        of the following form, for an individual neuron, 
+%          c(t) = SUM [j=1 to p] gamma-p*c(t-j) + s(t), where s(t) is the
+%          number of actual spikes at time t
+%
+%  This code must be run after downloading ca_source_extraction-master 
+%   from the GitHub repository created for the papers referenced above -
+%   Go to: https://github.com/epnev/ca_source_extraction.git
+%  You also need CVX placed in your MATLAB directory - http://cvxr.com/cvx/download/
+%
+%INPUT: VideoFileName - file name of the video to be segmented as a string,
+%          'Video.tif'
+%       maxNeurons - maximum neurons in the video, this is an estimate that
+%        constrains the maximum number of neurons, this value will affect
+%        the number of neurons found by the algorithm
+%       estNeuronSize - estimate of the average neuron diameter in pixels
+%       maxITER -  number of iterations to perform (update spatial, update
+%        temporal, merge, repeat)
+%
+%OUTPUT: SpatMap - d-by-K matrix representing the spatial map for the
+%         k-th neuron
+%         To view the maps, run the following code:
+%          % if d = width*height, in pixels
+%          myMap = zeros(width,height,K);
+%          for ii=1:K 
+%             myMap(:,:,ii) = reshape(SpatMap(:,ii),[width,height]);
+%          end
+%          % make figure with a representative example
+%          figure();imagesc(squeeze(myMap(:,:,1)));colormap jet;
+%
+%        CaSignal - a K-by-T matrix representing the inferred calcium
+%         signal for the k-th neuron across all time steps, dF/F
+%        width - width of original image in pixels
+%        height - height of original image in pixels
+%
+% If you are unsure of the neuron size input, you must be very cautious because
+% the initialization procedure is heavily dependent on that value.  Check 
+% greedyROI2d.m for that procedure, specifically look to imblur()
+%Created: 2016/02/09, 24 Cummington, Boston
+% Byron Price
+%Updated: 2016/02/09
+% By: Byron Price
+
+if nargin == 0 
+    VideoFileName = which('demoMovie.tif');
+    maxNeurons = 30;
+    estNeuronSize = 8;
+end
+if ischar(VideoFileName)
+    [~,~,ext] = fileparts(VideoFileName);
+    if strcmpi(ext,'.mat')
+        Y = struct2array(load(VideoFileName));
+    else
+        nam = VideoFileName;          % insert path to tiff stack here
+    %     sframe=1;						% user input: first frame to read (optional, default 1)
+        Y = readTifStack(nam);
+    end
+else
+    Y = VideoFileName;
+end
+
+    
+addpath(genpath('utilities'));
+
+
+
+Y = Y - min(Y(:)); 
+if ~isa(Y,'double');    Y = double(Y);  end         % convert to single
+
+[d1,d2,T] = size(Y);                                % dimensions of dataset
+d = d1*d2;                                          % total number of pixels
+width = d1;
+height = d2;
+% Set parameters
+
+K = maxNeurons;                        % number of components to be found - user defined
+tau = estNeuronSize;                   % std of gaussian kernel (size of neuron) - 4 is a good start 
+p = 4;                                % order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)
+merge_thr = 0.8;                       % merging threshold
+
+options = CNMFSetParms(...                      
+    'd1',d1,'d2',d2,...                         % dimensions of datasets
+    'search_method','dilate','dist',3,...       % search locations when updating spatial components
+    'deconv_method','constrained_foopsi',...    % activity deconvolution method
+    'temporal_iter',2,...                       % number of block-coordinate descent steps 
+    'fudge_factor',0.98,...                     % bias correction for AR coefficients
+    'merge_thr',merge_thr,...                    % merging threshold
+    'gSig',tau...
+    );
+% Data pre-processing
+
+[P,Y] = preprocess_data(Y,p);
+
+% fast initialization of spatial components using greedyROI and HALS
+
+[Ain,Cin,bin,fin,center] = initialize_components(Y,K,tau,options,P);  % initialize
+refine_components = false;
+% display centers of found components
+Cn =  correlation_image(Y); %reshape(P.sn,d1,d2);  %max(Y,[],3); %std(Y,[],3); % image statistic (only for display purposes)
+    
+% update spatial components
+Yr = reshape(Y,d,T);
+%clear Y;
+[A,b,Cin] = update_spatial_components(Yr,Cin,fin,[Ain,bin],P,options);
+
+% update temporal components
+P.p = 0;    % set AR temporarily to zero for speed
+if size(A,2) == 0
+    error('Zero spatial components found.')
+end
+[C,f,P,S,YrA] = update_temporal_components(Yr,A,b,Cin,fin,P,options);
+
+% merge found components
+[Am,Cm,K_m,merged_ROIs,Pm,Sm] = merge_components(Yr,A,b,C,f,P,S,options);
+
+% repeat
+Pm.p = p;    % restore AR value
+[A2,b2,Cm] = update_spatial_components(Yr,Cm,f,[Am,b],Pm,options);
+[C2,f2,P2,S2,YrA2] = update_temporal_components(Yr,A2,b2,Cm,f,Pm,options);
+
+% do some plotting
+[A_or,C_or,S_or,P_or] = order_ROIs(A2,C2,S2,P2); % order components
+K_m = size(C_or,1);
+[C_df,~] = extract_DF_F(Yr,A_or,C_or,P_or,options); % extract DF/F values (optional)
+
+SpatMap = A_or(:,1:end-1);
+CaSignal = C_df(1:end-1,:);
+Spikes = S_or(1:end-1,:);
+
+%contour_threshold = 0.95;                       % amount of energy used for each component to construct contour plot
+figure;
+[~,~] = plot_contours(A_or,Cn,options,1); % contour plot of spatial footprints
+title('Spatiotemporal Correlation Image');
+
+% for noiseless video of calcium dynamics
+% myMat = SpatMap*CaSignal;
+% maxColor = max(max(CaSignal));
+% T = size(CaSignal,2);
+% myMat = reshape(myMat,[width,height,T]);
+% figure();
+% for tt=1:T
+%     imagesc(myMat(:,:,tt));colormap jet;colorbar;caxis([0 maxColor]);
+%     pause(5/T)
+% end
+
+end
+
+##### SOURCE END #####
+--></body></html>

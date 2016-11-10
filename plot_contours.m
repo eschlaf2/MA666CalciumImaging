@@ -116,6 +116,7 @@ fontname = 'helvetica';
             end
         end
     end
+    CR = CR(~cellfun('isempty',CR(:,1)),:);
     cm = com(Aor(:,1:end),d1,d2);
     if display_numbers
         lbl = strtrim(cellstr(num2str((1:size(Aor,2))')));
@@ -125,14 +126,17 @@ fontname = 'helvetica';
     if ~(nargin < 6 || isempty(Coor))
         jsf = [];
     else
-        i = size(Aor,2);
+        i = size(CR,1);
+        while isempty(CR{i,1}) && i > 0
+            i = i - 1;
+        end
         jsf(i) = struct('id',i,...
                 'coordinates',CR{i,1}',...
                 'values',CR{i,2},...
                 'bbox',[min(CR{i,1}(1,:)),max(CR{i,1}(1,:)),min(CR{i,1}(2,:)),max(CR{i,1}(2,:))],...
                 'centroid',cm(i,:));
 %         jsf = repmat(jsf,size(Aor,2), 1);
-        for i = 1:size(Aor,2)-1;
+        for j = 1:i-1;
             if ~isempty(CR{i,1})
                 jsf(i) = struct('id',i,...
                             'coordinates',CR{i,1}',...

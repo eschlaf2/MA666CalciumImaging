@@ -97,7 +97,7 @@ height = d2;
 
 K = maxNeurons;                        % number of components to be found - user defined
 tau = estNeuronSize;                   % std of gaussian kernel (size of neuron) - 4 is a good start 
-p = 4;                                % order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)
+p = 2;                                % order of autoregressive system (p = 0 no dynamics, p=1 just decay, p = 2, both rise and decay)
 merge_thr = 0.8;                       % merging threshold
 
 options = CNMFSetParms(...                      
@@ -124,12 +124,12 @@ Cn =  correlation_image(Y); %reshape(P.sn,d1,d2);  %max(Y,[],3); %std(Y,[],3); %
 Yr = reshape(Y,d,T);
 %clear Y;
 [A,b,Cin] = update_spatial_components(Yr,Cin,fin,[Ain,bin],P,options);
-
-% update temporal components
-P.p = 0;    % set AR temporarily to zero for speed
 if size(A,2) == 0
     error('Zero spatial components found.')
 end
+
+% update temporal components
+P.p = 0;    % set AR temporarily to zero for speed
 [C,f,P,S,YrA] = update_temporal_components(Yr,A,b,Cin,fin,P,options);
 
 % merge found components

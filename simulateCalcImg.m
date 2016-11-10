@@ -12,11 +12,11 @@ clear all;
 %% simulation parameters
 N = 10; % number of ROI to simulate
 snrImg = inf; % signal-to-noise ratio, inf is no noise (TO DO)
-nscale = .3; % for now to add noise that is a fraction of the maximum DFF
+nsscale = 0.3; % for now to add noise that is a fraction of the maximum DFF
 
-snrDFF = 2; % signal to noise ratio of the DFF singals
+snrDFF = 3; % signal to noise ratio of the DFF singals
 
-svMovie = 'simulateCalcImg.avi'; % if empty doesn't save
+svMovie = 'simulateCalcImg'; % if empty doesn't save
 % svMovie = '';
 
 %% basic parameters that should be tuned to simulate realistic data
@@ -89,9 +89,10 @@ ax1 = axes('Position', [0.1 0.1 .8 .8]);
 himg = imagesc(zeros(sz, sz));
 axis image;
 caxis([0, cmax]);
-colormap('parula');
+colormap('gray');
 
 mov(nT) = struct('cdata', [], 'colormap', []);
+im = zeros(sz,sz,nT);
 for t = 1:nT
     temp = zeros(sz, sz);
     for i = 1:N
@@ -100,10 +101,11 @@ for t = 1:nT
     % add noise for the video, but this should be done correctly by
     % actually using the input SNR
     temp = temp + rand(sz) * cmax * nsscale; % hack for noise
-    
+    im(:,:,t) = temp;
     set(himg, 'CData', temp);
     mov(t) = getframe(gcf);
 end
+save(svMovie,'im');
 
 %% write the movie to a file
 if ~isempty(svMovie)
